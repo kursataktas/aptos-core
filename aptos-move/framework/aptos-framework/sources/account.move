@@ -686,7 +686,7 @@ module aptos_framework::account {
         let new_auth_key = from_bcs::to_address(new_auth_key_vector);
         table::add(address_map, new_auth_key, originating_addr);
 
-        if (std::features::module_event_migration_enabled()) {
+        if (std::features::account_and_coin_module_event_migration_enabled()) {
             event::emit(KeyRotation {
                 account: originating_addr,
                 old_authentication_key: account_resource.authentication_key,
@@ -805,7 +805,7 @@ module aptos_framework::account {
 
     public(friend) fun register_coin<CoinType>(account_addr: address) acquires Account {
         let account = borrow_global_mut<Account>(account_addr);
-        if (std::features::module_event_migration_enabled()) {
+        if (std::features::account_and_coin_module_event_migration_enabled()) {
             event::emit(
                 CoinRegister {
                     account: account_addr,
