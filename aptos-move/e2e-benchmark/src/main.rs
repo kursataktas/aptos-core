@@ -235,7 +235,6 @@ fn main() {
             0,
             package.publish_transaction_payload(),
         );
-        // println!("Published package: {:?}", entry_point.package_name());
         if let Some(init_entry_point) = entry_point.initialize_entry_point() {
             execute_txn(
                 &mut executor,
@@ -247,10 +246,6 @@ fn main() {
                     Some(publisher.address()),
                 ),
             );
-            // println!(
-            //     "Executed init entry point: {:?}",
-            //     entry_point.initialize_entry_point()
-            // );
         }
 
         let measurement = execute_and_time_entry_point(

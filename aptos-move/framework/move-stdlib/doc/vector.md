@@ -150,6 +150,9 @@ The length of the vectors are not equal.
 
 <a id="0x1_vector_USE_MOVE_RANGE"></a>
 
+Whether to utilize native vector::move_range
+Vector module cannot call features module, due to cyclic dependency,
+so this is a constant.
 
 
 <pre><code><b>const</b> <a href="vector.md#0x1_vector_USE_MOVE_RANGE">USE_MOVE_RANGE</a>: bool = <b>true</b>;
@@ -488,7 +491,7 @@ Pushes all of the elements of the <code>other</code> vector into the <code>self<
     <b>if</b> (<a href="vector.md#0x1_vector_USE_MOVE_RANGE">USE_MOVE_RANGE</a>) {
         <b>let</b> self_length = <a href="vector.md#0x1_vector_length">length</a>(self);
         <b>let</b> other_length = <a href="vector.md#0x1_vector_length">length</a>(&other);
-        <a href="vector.md#0x1_vector_range_move">range_move</a>(&<b>mut</b> other, 0, other_length, self, self_length);
+        <a href="vector.md#0x1_vector_move_range">move_range</a>(&<b>mut</b> other, 0, other_length, self, self_length);
         <a href="vector.md#0x1_vector_destroy_empty">destroy_empty</a>(other);
     } <b>else</b> {
         <a href="vector.md#0x1_vector_reverse">reverse</a>(&<b>mut</b> other);
@@ -557,7 +560,7 @@ In many languages this is also called <code>split_off</code>.
 
     <b>let</b> other = <a href="vector.md#0x1_vector_empty">empty</a>();
     <b>if</b> (<a href="vector.md#0x1_vector_USE_MOVE_RANGE">USE_MOVE_RANGE</a>) {
-        <a href="vector.md#0x1_vector_range_move">range_move</a>(self, new_len, len - new_len, &<b>mut</b> other, 0);
+        <a href="vector.md#0x1_vector_move_range">move_range</a>(self, new_len, len - new_len, &<b>mut</b> other, 0);
     } <b>else</b> {
         <b>while</b> (len &gt; new_len) {
             <a href="vector.md#0x1_vector_push_back">push_back</a>(&<b>mut</b> other, <a href="vector.md#0x1_vector_pop_back">pop_back</a>(self));
@@ -766,7 +769,7 @@ Aborts if out of bounds.
             };
         } <b>else</b> {
             <b>let</b> other = <a href="vector.md#0x1_vector_singleton">singleton</a>(e);
-            <a href="vector.md#0x1_vector_range_move">range_move</a>(&<b>mut</b> other, 0, 1, self, i);
+            <a href="vector.md#0x1_vector_move_range">move_range</a>(&<b>mut</b> other, 0, 1, self, i);
             <a href="vector.md#0x1_vector_destroy_empty">destroy_empty</a>(other);
         }
     } <b>else</b> {
@@ -815,7 +818,7 @@ Aborts if <code>i</code> is out of bounds.
             <a href="vector.md#0x1_vector_pop_back">pop_back</a>(self)
         } <b>else</b> {
             <b>let</b> other = <a href="vector.md#0x1_vector_empty">empty</a>();
-            <a href="vector.md#0x1_vector_range_move">range_move</a>(self, i, 1, &<b>mut</b> other, 0);
+            <a href="vector.md#0x1_vector_move_range">move_range</a>(self, i, 1, &<b>mut</b> other, 0);
             <b>let</b> result = <a href="vector.md#0x1_vector_pop_back">pop_back</a>(&<b>mut</b> other);
             <a href="vector.md#0x1_vector_destroy_empty">destroy_empty</a>(other);
             result
@@ -920,10 +923,13 @@ Aborts if <code>i</code> is out of bounds.
 <pre><code><b>public</b> <b>fun</b> <a href="vector.md#0x1_vector_replace">replace</a>&lt;Element&gt;(self: &<b>mut</b> <a href="vector.md#0x1_vector">vector</a>&lt;Element&gt;, i: u64, val: Element): Element {
     <b>let</b> last_idx = <a href="vector.md#0x1_vector_length">length</a>(self);
     <b>assert</b>!(i &lt; last_idx, <a href="vector.md#0x1_vector_EINDEX_OUT_OF_BOUNDS">EINDEX_OUT_OF_BOUNDS</a>);
-    std::mem::replace(<a href="vector.md#0x1_vector_borrow_mut">borrow_mut</a>(self, i), val)
-    // <a href="vector.md#0x1_vector_push_back">push_back</a>(self, val);
-    // <a href="vector.md#0x1_vector_swap">swap</a>(self, i, last_idx);
-    // <a href="vector.md#0x1_vector_pop_back">pop_back</a>(self)
+    <b>if</b> (<a href="vector.md#0x1_vector_USE_MOVE_RANGE">USE_MOVE_RANGE</a>) {
+        <a href="mem.md#0x1_mem_replace">mem::replace</a>(<a href="vector.md#0x1_vector_borrow_mut">borrow_mut</a>(self, i), val)
+    } <b>else</b> {
+        <a href="vector.md#0x1_vector_push_back">push_back</a>(self, val);
+        <a href="vector.md#0x1_vector_swap">swap</a>(self, i, last_idx);
+        <a href="vector.md#0x1_vector_pop_back">pop_back</a>(self)
+    }
 }
 </code></pre>
 

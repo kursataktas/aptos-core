@@ -9,6 +9,8 @@
 /// Move functions here because many have loops, requiring loop invariants to prove, and
 /// the return on investment didn't seem worth it for these simple functions.
 module std::vector {
+    use std::mem;
+
     /// The index into the vector is out of bounds
     const EINDEX_OUT_OF_BOUNDS: u64 = 0x20000;
 
@@ -24,6 +26,9 @@ module std::vector {
     /// The range in `slice` is invalid.
     const EINVALID_SLICE_RANGE: u64 = 0x20004;
 
+    /// Whether to utilize native vector::move_range
+    /// Vector module cannot call features module, due to cyclic dependency,
+    /// so this is a constant.
     const USE_MOVE_RANGE: bool = true;
 
     #[bytecode_instruction]
@@ -118,7 +123,7 @@ module std::vector {
         if (USE_MOVE_RANGE) {
             let self_length = length(self);
             let other_length = length(&other);
-            range_move(&mut other, 0, other_length, self, self_length);
+            move_range(&mut other, 0, other_length, self, self_length);
             destroy_empty(other);
         } else {
             reverse(&mut other);
@@ -156,7 +161,7 @@ module std::vector {
 
         let other = empty();
         if (USE_MOVE_RANGE) {
-            range_move(self, new_len, len - new_len, &mut other, 0);
+            move_range(self, new_len, len - new_len, &mut other, 0);
         } else {
             while (len > new_len) {
                 push_back(&mut other, pop_back(self));
@@ -258,7 +263,7 @@ module std::vector {
                 };
             } else {
                 let other = singleton(e);
-                range_move(&mut other, 0, 1, self, i);
+                move_range(&mut other, 0, 1, self, i);
                 destroy_empty(other);
             }
         } else {
@@ -290,7 +295,7 @@ module std::vector {
                 pop_back(self)
             } else {
                 let other = empty();
-                range_move(self, i, 1, &mut other, 0);
+                move_range(self, i, 1, &mut other, 0);
                 let result = pop_back(&mut other);
                 destroy_empty(other);
                 result
@@ -344,10 +349,13 @@ module std::vector {
     public fun replace<Element>(self: &mut vector<Element>, i: u64, val: Element): Element {
         let last_idx = length(self);
         assert!(i < last_idx, EINDEX_OUT_OF_BOUNDS);
-        std::mem::replace(borrow_mut(self, i), val)
-        // push_back(self, val);
-        // swap(self, i, last_idx);
-        // pop_back(self)
+        if (USE_MOVE_RANGE) {
+            mem::replace(borrow_mut(self, i), val)
+        } else {
+            push_back(self, val);
+            swap(self, i, last_idx);
+            pop_back(self)
+        }
     }
 
     /// Apply the function to each element in the vector, consuming it.

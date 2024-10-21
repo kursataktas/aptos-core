@@ -1045,7 +1045,10 @@ impl FakeExecutor {
             let elapsed = start.elapsed();
             if let Err(err) = result {
                 if !should_error {
-                    println!("Shouldn't error, but ignoring for now... {}", err);
+                    println!(
+                        "Entry function under measurement failed with an error. Continuing, but measurements are probably not what is expected. Error: {}",
+                        err
+                    );
                 }
             }
             times.push(TimeAndGas {
