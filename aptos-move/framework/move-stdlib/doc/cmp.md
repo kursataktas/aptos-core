@@ -6,13 +6,12 @@
 
 
 -  [Enum `Ordering`](#0x1_cmp_Ordering)
--  [Constants](#@Constants_0)
 -  [Function `compare`](#0x1_cmp_compare)
--  [Function `is_equal`](#0x1_cmp_is_equal)
--  [Function `is_less_than`](#0x1_cmp_is_less_than)
--  [Function `is_less_or_equal`](#0x1_cmp_is_less_or_equal)
--  [Function `is_greater_than`](#0x1_cmp_is_greater_than)
--  [Function `is__greater_or_equal`](#0x1_cmp_is__greater_or_equal)
+-  [Function `is_eq`](#0x1_cmp_is_eq)
+-  [Function `is_lt`](#0x1_cmp_is_lt)
+-  [Function `is_le`](#0x1_cmp_is_le)
+-  [Function `is_gt`](#0x1_cmp_is_gt)
+-  [Function `is_ge`](#0x1_cmp_is_ge)
 
 
 <pre><code></code></pre>
@@ -35,7 +34,7 @@
 
 
 <details>
-<summary>LessThan</summary>
+<summary>Less</summary>
 
 
 <details>
@@ -67,7 +66,7 @@
 </details>
 
 <details>
-<summary>GreaterThan</summary>
+<summary>Greater</summary>
 
 
 <details>
@@ -84,45 +83,19 @@
 
 </details>
 
-<a id="@Constants_0"></a>
-
-## Constants
-
-
-<a id="0x1_cmp_EQUAL"></a>
-
-
-
-<pre><code><b>const</b> <a href="cmp.md#0x1_cmp_EQUAL">EQUAL</a>: u8 = 1;
-</code></pre>
-
-
-
-<a id="0x1_cmp_GREATER_THAN"></a>
-
-
-
-<pre><code><b>const</b> <a href="cmp.md#0x1_cmp_GREATER_THAN">GREATER_THAN</a>: u8 = 2;
-</code></pre>
-
-
-
-<a id="0x1_cmp_LESS_THAN"></a>
-
-
-
-<pre><code><b>const</b> <a href="cmp.md#0x1_cmp_LESS_THAN">LESS_THAN</a>: u8 = 0;
-</code></pre>
-
-
-
 <a id="0x1_cmp_compare"></a>
 
 ## Function `compare`
 
+Compares two values with the natural ordering:
+- native types are compared identically to <code>&lt;</code> and other operators
+- complex types
+- Structs and vectors - are compared lexicographically - first field/element is compared first,
+and if equal we proceed to the next.
+- enum's are compared first by their variant, and if equal - they are compared as structs are.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="cmp.md#0x1_cmp_compare">compare</a>&lt;T&gt;(first: &T, second: &T): <a href="cmp.md#0x1_cmp_Ordering">cmp::Ordering</a>
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="cmp.md#0x1_cmp_compare">compare</a>&lt;T&gt;(first: &T, second: &T): <a href="cmp.md#0x1_cmp_Ordering">cmp::Ordering</a>
 </code></pre>
 
 
@@ -131,20 +104,20 @@
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>native</b> <b>fun</b> <a href="cmp.md#0x1_cmp_compare">compare</a>&lt;T&gt;(first: &T, second: &T): <a href="cmp.md#0x1_cmp_Ordering">Ordering</a>;
+<pre><code><b>native</b> <b>public</b>(<b>friend</b>) <b>fun</b> <a href="cmp.md#0x1_cmp_compare">compare</a>&lt;T&gt;(first: &T, second: &T): <a href="cmp.md#0x1_cmp_Ordering">Ordering</a>;
 </code></pre>
 
 
 
 </details>
 
-<a id="0x1_cmp_is_equal"></a>
+<a id="0x1_cmp_is_eq"></a>
 
-## Function `is_equal`
+## Function `is_eq`
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="cmp.md#0x1_cmp_is_equal">is_equal</a>(self: &<a href="cmp.md#0x1_cmp_Ordering">cmp::Ordering</a>): bool
+<pre><code><b>public</b> <b>fun</b> <a href="cmp.md#0x1_cmp_is_eq">is_eq</a>(self: &<a href="cmp.md#0x1_cmp_Ordering">cmp::Ordering</a>): bool
 </code></pre>
 
 
@@ -153,7 +126,7 @@
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="cmp.md#0x1_cmp_is_equal">is_equal</a>(self: &<a href="cmp.md#0x1_cmp_Ordering">Ordering</a>): bool {
+<pre><code><b>public</b> <b>fun</b> <a href="cmp.md#0x1_cmp_is_eq">is_eq</a>(self: &<a href="cmp.md#0x1_cmp_Ordering">Ordering</a>): bool {
     self is Ordering::Equal
 }
 </code></pre>
@@ -162,13 +135,13 @@
 
 </details>
 
-<a id="0x1_cmp_is_less_than"></a>
+<a id="0x1_cmp_is_lt"></a>
 
-## Function `is_less_than`
+## Function `is_lt`
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="cmp.md#0x1_cmp_is_less_than">is_less_than</a>(self: &<a href="cmp.md#0x1_cmp_Ordering">cmp::Ordering</a>): bool
+<pre><code><b>public</b> <b>fun</b> <a href="cmp.md#0x1_cmp_is_lt">is_lt</a>(self: &<a href="cmp.md#0x1_cmp_Ordering">cmp::Ordering</a>): bool
 </code></pre>
 
 
@@ -177,8 +150,8 @@
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="cmp.md#0x1_cmp_is_less_than">is_less_than</a>(self: &<a href="cmp.md#0x1_cmp_Ordering">Ordering</a>): bool {
-    self is Ordering::LessThan
+<pre><code><b>public</b> <b>fun</b> <a href="cmp.md#0x1_cmp_is_lt">is_lt</a>(self: &<a href="cmp.md#0x1_cmp_Ordering">Ordering</a>): bool {
+    self is Ordering::Less
 }
 </code></pre>
 
@@ -186,13 +159,13 @@
 
 </details>
 
-<a id="0x1_cmp_is_less_or_equal"></a>
+<a id="0x1_cmp_is_le"></a>
 
-## Function `is_less_or_equal`
+## Function `is_le`
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="cmp.md#0x1_cmp_is_less_or_equal">is_less_or_equal</a>(self: &<a href="cmp.md#0x1_cmp_Ordering">cmp::Ordering</a>): bool
+<pre><code><b>public</b> <b>fun</b> <a href="cmp.md#0x1_cmp_is_le">is_le</a>(self: &<a href="cmp.md#0x1_cmp_Ordering">cmp::Ordering</a>): bool
 </code></pre>
 
 
@@ -201,8 +174,8 @@
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="cmp.md#0x1_cmp_is_less_or_equal">is_less_or_equal</a>(self: &<a href="cmp.md#0x1_cmp_Ordering">Ordering</a>): bool {
-    !(self is Ordering::GreaterThan)
+<pre><code><b>public</b> <b>fun</b> <a href="cmp.md#0x1_cmp_is_le">is_le</a>(self: &<a href="cmp.md#0x1_cmp_Ordering">Ordering</a>): bool {
+    !(self is Ordering::Greater)
 }
 </code></pre>
 
@@ -210,13 +183,13 @@
 
 </details>
 
-<a id="0x1_cmp_is_greater_than"></a>
+<a id="0x1_cmp_is_gt"></a>
 
-## Function `is_greater_than`
+## Function `is_gt`
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="cmp.md#0x1_cmp_is_greater_than">is_greater_than</a>(self: &<a href="cmp.md#0x1_cmp_Ordering">cmp::Ordering</a>): bool
+<pre><code><b>public</b> <b>fun</b> <a href="cmp.md#0x1_cmp_is_gt">is_gt</a>(self: &<a href="cmp.md#0x1_cmp_Ordering">cmp::Ordering</a>): bool
 </code></pre>
 
 
@@ -225,8 +198,8 @@
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="cmp.md#0x1_cmp_is_greater_than">is_greater_than</a>(self: &<a href="cmp.md#0x1_cmp_Ordering">Ordering</a>): bool {
-    self is Ordering::GreaterThan
+<pre><code><b>public</b> <b>fun</b> <a href="cmp.md#0x1_cmp_is_gt">is_gt</a>(self: &<a href="cmp.md#0x1_cmp_Ordering">Ordering</a>): bool {
+    self is Ordering::Greater
 }
 </code></pre>
 
@@ -234,13 +207,13 @@
 
 </details>
 
-<a id="0x1_cmp_is__greater_or_equal"></a>
+<a id="0x1_cmp_is_ge"></a>
 
-## Function `is__greater_or_equal`
+## Function `is_ge`
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="cmp.md#0x1_cmp_is__greater_or_equal">is__greater_or_equal</a>(self: &<a href="cmp.md#0x1_cmp_Ordering">cmp::Ordering</a>): bool
+<pre><code><b>public</b> <b>fun</b> <a href="cmp.md#0x1_cmp_is_ge">is_ge</a>(self: &<a href="cmp.md#0x1_cmp_Ordering">cmp::Ordering</a>): bool
 </code></pre>
 
 
@@ -249,8 +222,8 @@
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="cmp.md#0x1_cmp_is__greater_or_equal">is__greater_or_equal</a>(self: &<a href="cmp.md#0x1_cmp_Ordering">Ordering</a>): bool {
-    !(self is Ordering::LessThan)
+<pre><code><b>public</b> <b>fun</b> <a href="cmp.md#0x1_cmp_is_ge">is_ge</a>(self: &<a href="cmp.md#0x1_cmp_Ordering">Ordering</a>): bool {
+    !(self is Ordering::Less)
 }
 </code></pre>
 

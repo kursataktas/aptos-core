@@ -5,7 +5,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-//! Implementation of native functions for utf8 strings.
+//! Implementation of native functions for value comparison.
 
 use aptos_gas_schedule::gas_params::natives::move_stdlib::{
     CMP_COMPARE_BASE, CMP_COMPARE_PER_ABS_VAL_UNIT,
@@ -16,27 +16,21 @@ use aptos_native_interface::{
 use move_core_types::vm_status::StatusCode;
 use move_vm_runtime::native_functions::NativeFunction;
 use move_vm_types::{
-    loaded_data::runtime_types::Type, natives::function::PartialVMError, values::{Struct, Value},
+    loaded_data::runtime_types::Type,
+    natives::function::PartialVMError,
+    values::{Struct, Value},
 };
 use smallvec::{smallvec, SmallVec};
 use std::collections::VecDeque;
-
-// The implementation approach delegates all utf8 handling to Rust.
-// This is possible without copying of bytes because (a) we can
-// get a `std::cell::Ref<Vec<u8>>` from a `vector<u8>` and in turn a `&[u8]`
-// from that (b) assuming that `vector<u8>` embedded in a string
-// is already valid utf8, we can use `str::from_utf8_unchecked` to
-// create a `&str` view on the bytes without a copy. Once we have this
-// view, we can call ut8 functions like length, substring, etc.
 
 const ORDERING_LESS_THAN_VARIANT: u16 = 0;
 const ORDERING_EQUAL_VARIANT: u16 = 1;
 const ORDERING_GREATER_THAN_VARIANT: u16 = 2;
 
 /***************************************************************************************************
- * native fun internal_check_utf8
+ * native fun native_compare
  *
- *   gas cost: base_cost + unit_cost * length_in_bytes
+ *   gas cost: CMP_COMPARE_BASE + CMP_COMPARE_PER_ABS_VAL_UNIT * derefernce_size_of_both_values
  *
  **************************************************************************************************/
 fn native_compare(
@@ -64,7 +58,9 @@ fn native_compare(
         std::cmp::Ordering::Greater => ORDERING_GREATER_THAN_VARIANT,
     };
 
-    Ok(smallvec![Value::struct_(Struct::pack(vec![Value::u16(ordering_move_variant)]))])
+    Ok(smallvec![Value::struct_(Struct::pack(vec![Value::u16(
+        ordering_move_variant
+    )]))])
 }
 
 /***************************************************************************************************

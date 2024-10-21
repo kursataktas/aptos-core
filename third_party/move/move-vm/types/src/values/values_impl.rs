@@ -537,8 +537,12 @@ impl ValueImpl {
             | (ContainerRef(_), _)
             | (IndexedRef(_), _)
             | (DelayedFieldID { .. }, _) => {
-                return Err(PartialVMError::new(StatusCode::INTERNAL_TYPE_ERROR)
-                    .with_message(format!("cannot compare values: {:?}, {:?}", self, other)))
+                return Err(
+                    PartialVMError::new(StatusCode::INTERNAL_TYPE_ERROR).with_message(format!(
+                        "inconsistent argument types passed to equals check: {:?}, {:?}",
+                        self, other
+                    )),
+                )
             },
         };
 
@@ -563,11 +567,8 @@ impl ValueImpl {
             (ContainerRef(l), ContainerRef(r)) => l.compare(r)?,
             (IndexedRef(l), IndexedRef(r)) => l.compare(r)?,
 
-            // Disallow equality for delayed values. The rationale behind this
-            // semantics is that identifiers might not be deterministic, and
-            // therefore equality can have different outcomes on different nodes
-            // of the network. Note that the error returned here is not an
-            // invariant violation but a runtime error.
+            // Disallow comparison for delayed values.
+            // (see `ValueImpl::equals` above for details on reasoning behind it)
             (DelayedFieldID { .. }, DelayedFieldID { .. }) => {
                 return Err(PartialVMError::new(StatusCode::VM_EXTENSION_ERROR)
                     .with_message("cannot compare delayed values".to_string()))
@@ -586,8 +587,12 @@ impl ValueImpl {
             | (ContainerRef(_), _)
             | (IndexedRef(_), _)
             | (DelayedFieldID { .. }, _) => {
-                return Err(PartialVMError::new(StatusCode::INTERNAL_TYPE_ERROR)
-                    .with_message(format!("cannot compare values: {:?}, {:?}", self, other)))
+                return Err(
+                    PartialVMError::new(StatusCode::INTERNAL_TYPE_ERROR).with_message(format!(
+                        "inconsistent argument types passed to comparison: {:?}, {:?}",
+                        self, other
+                    )),
+                )
             },
         };
 
