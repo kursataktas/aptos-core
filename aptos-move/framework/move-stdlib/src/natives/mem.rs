@@ -5,7 +5,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-//! Implementation of native functions for utf8 strings.
+//! Implementation of native functions for memory manipulation.
 
 use aptos_gas_schedule::gas_params::natives::move_stdlib::MEM_SWAP_BASE;
 use aptos_native_interface::{
@@ -35,7 +35,7 @@ pub fn get_feature_not_available_error() -> SafeNativeError {
 /***************************************************************************************************
  * native fun native_swap
  *
- *   gas cost: MEM_SWAP_BASE + MEM_SWAP_PER_ABS_VAL_UNIT * abstract_size_of_arguments
+ *   gas cost: MEM_SWAP_BASE
  *
  **************************************************************************************************/
 fn native_swap(

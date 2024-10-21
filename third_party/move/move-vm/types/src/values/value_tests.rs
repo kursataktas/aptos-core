@@ -307,25 +307,6 @@ fn test_mem_swap() -> PartialVMResult<()> {
         }
     }
 
-    // assert_err!(get_local(&locals, 0).swap_values(get_local(&locals, 4)));
-    // assert_err!(get_local(&locals, 0).swap_values(get_local(&locals, 6)));
-    // assert_err!(get_local(&locals, 0).swap_values(get_local(&locals, 8)));
-    // assert_err!(get_local(&locals, 0).swap_values(get_local(&locals, 10)));
-    // assert_err!(get_local(&locals, 0).swap_values(get_local(&locals, 12)));
-    // assert_err!(get_local(&locals, 2).swap_values(get_local(&locals, 4)));
-    // assert_err!(get_local(&locals, 2).swap_values(get_local(&locals, 4)));
-    // assert_err!(get_local(&locals, 2).swap_values(get_local(&locals, 4)));
-    // assert_err!(get_local(&locals, 2).swap_values(get_local(&locals, 4)));
-
-    // assert_ok!(get_local(&locals, 0).swap_values(get_local(&locals, 1)));
-    // assert_ok!(get_local(&locals, 2).swap_values(get_local(&locals, 3)));
-    // assert_ok!(get_local(&locals, 4).swap_values(get_local(&locals, 5)));
-    // assert_ok!(get_local(&locals, 6).swap_values(get_local(&locals, 7)));
-    // assert_ok!(get_local(&locals, 8).swap_values(get_local(&locals, 9)));
-    // assert_ok!(get_local(&locals, 10).swap_values(get_local(&locals, 11)));
-    // assert_ok!(get_local(&locals, 12).swap_values(get_local(&locals, 13)));
-    // assert_ok!(get_local(&locals, 14).swap_values(get_local(&locals, 15)));
-
     Ok(())
 }
 
