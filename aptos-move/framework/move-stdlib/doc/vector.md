@@ -24,7 +24,7 @@ the return on investment didn't seem worth it for these simple functions.
 -  [Function `pop_back`](#0x1_vector_pop_back)
 -  [Function `destroy_empty`](#0x1_vector_destroy_empty)
 -  [Function `swap`](#0x1_vector_swap)
--  [Function `range_move`](#0x1_vector_range_move)
+-  [Function `move_range`](#0x1_vector_move_range)
 -  [Function `singleton`](#0x1_vector_singleton)
 -  [Function `reverse`](#0x1_vector_reverse)
 -  [Function `reverse_slice`](#0x1_vector_reverse_slice)
@@ -343,19 +343,20 @@ Aborts if <code>i</code> or <code>j</code> is out of bounds.
 
 </details>
 
-<a id="0x1_vector_range_move"></a>
+<a id="0x1_vector_move_range"></a>
 
-## Function `range_move`
+## Function `move_range`
 
 Moves range of elements <code>[removal_position, removal_position + length)</code> from vector <code>from</code>,
 to vector <code><b>to</b></code>, inserting them starting at the <code>insert_position</code>.
 In the <code>from</code> vector, elements after the selected range are moved left to fill the hole
 (i.e. range is removed, while the order of the rest of the elements is kept)
 In the <code><b>to</b></code> vector, elements after the <code>insert_position</code> are moved the the right to make space for new elements
-(i.e. range is inserted, while the order of the rest of the elements is kept)
+(i.e. range is inserted, while the order of the rest of the elements is kept).
+Move prevents from having two mutable references to the same value, so <code>from</code> and <code><b>to</b></code> vectors are always distinct.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="vector.md#0x1_vector_range_move">range_move</a>&lt;T&gt;(from: &<b>mut</b> <a href="vector.md#0x1_vector">vector</a>&lt;T&gt;, removal_position: u64, length: u64, <b>to</b>: &<b>mut</b> <a href="vector.md#0x1_vector">vector</a>&lt;T&gt;, insert_position: u64)
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="vector.md#0x1_vector_move_range">move_range</a>&lt;T&gt;(from: &<b>mut</b> <a href="vector.md#0x1_vector">vector</a>&lt;T&gt;, removal_position: u64, length: u64, <b>to</b>: &<b>mut</b> <a href="vector.md#0x1_vector">vector</a>&lt;T&gt;, insert_position: u64)
 </code></pre>
 
 
@@ -364,7 +365,7 @@ In the <code><b>to</b></code> vector, elements after the <code>insert_position</
 <summary>Implementation</summary>
 
 
-<pre><code><b>native</b> <b>public</b> <b>fun</b> <a href="vector.md#0x1_vector_range_move">range_move</a>&lt;T&gt;(from: &<b>mut</b> <a href="vector.md#0x1_vector">vector</a>&lt;T&gt;, removal_position: u64, length: u64, <b>to</b>: &<b>mut</b> <a href="vector.md#0x1_vector">vector</a>&lt;T&gt;, insert_position: u64);
+<pre><code><b>native</b> <b>public</b>(<b>friend</b>) <b>fun</b> <a href="vector.md#0x1_vector_move_range">move_range</a>&lt;T&gt;(from: &<b>mut</b> <a href="vector.md#0x1_vector">vector</a>&lt;T&gt;, removal_position: u64, length: u64, <b>to</b>: &<b>mut</b> <a href="vector.md#0x1_vector">vector</a>&lt;T&gt;, insert_position: u64);
 </code></pre>
 
 

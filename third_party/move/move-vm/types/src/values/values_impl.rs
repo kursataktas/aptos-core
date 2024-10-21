@@ -2307,7 +2307,7 @@ fn check_elem_layout(ty: &Type, v: &Container) -> PartialVMResult<()> {
 }
 
 impl VectorRef {
-    pub fn len_usize_raw(&self, type_param: &Type) -> PartialVMResult<usize> {
+    pub fn length_as_usize(&self, type_param: &Type) -> PartialVMResult<usize> {
         let c: &Container = self.0.container();
         check_elem_layout(type_param, c)?;
 
@@ -2327,22 +2327,7 @@ impl VectorRef {
     }
 
     pub fn len(&self, type_param: &Type) -> PartialVMResult<Value> {
-        let c: &Container = self.0.container();
-        check_elem_layout(type_param, c)?;
-
-        let len = match c {
-            Container::VecU8(r) => r.borrow().len(),
-            Container::VecU16(r) => r.borrow().len(),
-            Container::VecU32(r) => r.borrow().len(),
-            Container::VecU64(r) => r.borrow().len(),
-            Container::VecU128(r) => r.borrow().len(),
-            Container::VecU256(r) => r.borrow().len(),
-            Container::VecBool(r) => r.borrow().len(),
-            Container::VecAddress(r) => r.borrow().len(),
-            Container::Vec(r) => r.borrow().len(),
-            Container::Locals(_) | Container::Struct(_) => unreachable!(),
-        };
-        Ok(Value::u64(len as u64))
+        Ok(Value::u64(self.length_as_usize(type_param)? as u64))
     }
 
     pub fn push_back(&self, e: Value, type_param: &Type) -> PartialVMResult<()> {
@@ -2472,15 +2457,23 @@ impl VectorRef {
         Ok(())
     }
 
+    /// Moves range of elements `[removal_position, removal_position + length)` from vector `from`,
+    /// to vector `to`, inserting them starting at the `insert_position`.
+    /// In the `from` vector, elements after the selected range are moved left to fill the hole
+    /// (i.e. range is removed, while the order of the rest of the elements is kept)
+    /// In the `to` vector, elements after the `insert_position` are moved the the right to make space for new elements
+    /// (i.e. range is inserted, while the order of the rest of the elements is kept).
+    ///
+    /// Move prevents from having two mutable references to the same value, so `from` and `to` vectors are guaranted to be distinct.
     pub fn move_range(
-        &self,
+        from_self: &Self,
         removal_position: usize,
         length: usize,
         to_self: &Self,
         insert_position: usize,
         type_param: &Type,
     ) -> PartialVMResult<()> {
-        let from_c = self.0.container();
+        let from_c = from_self.0.container();
         let to_c = to_self.0.container();
 
         // potentially unnecessary as native call should've checked the types already
@@ -2528,7 +2521,7 @@ impl VectorRef {
             (_, _) => unreachable!(),
         }
 
-        self.0.mark_dirty();
+        from_self.0.mark_dirty();
         to_self.0.mark_dirty();
         Ok(())
     }
