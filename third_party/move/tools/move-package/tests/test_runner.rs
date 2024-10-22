@@ -81,9 +81,9 @@ fn run_test_impl(
                 )
                 .into())
             },
-            (true, _) => match BuildPlan::create(resolved_package)
-                .and_then(|bp| bp.compile_no_exit(&compiler_config.clone(), &mut Vec::new()))
-            {
+            (true, _) => match BuildPlan::create(resolved_package).and_then(|bp| {
+                bp.compile_no_exit(&compiler_config.clone(), vec![], &mut Vec::new())
+            }) {
                 Ok((mut pkg, _)) => {
                     pkg.compiled_package_info.source_digest =
                         Some(PackageDigest::from("ELIDED_FOR_TEST"));
