@@ -264,7 +264,7 @@ impl StateComputer for ExecutionProxy {
 
                 // notify mempool about failed transaction
                 if let Err(e) = txn_notifier
-                    .notify_failed_txn(user_txns, user_txn_status)
+                    .notify_failed_txn(&user_txns, user_txn_status)
                     .await
                 {
                     error!(
