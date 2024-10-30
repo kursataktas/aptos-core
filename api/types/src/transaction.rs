@@ -517,6 +517,7 @@ pub struct UserTransactionRequest {
     pub signature: Option<TransactionSignature>,
 }
 
+// (We are not using this anymore)
 // /// Request to create signing messages
 // #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Object)]
 // pub struct UserCreateSigningMessageRequest {
