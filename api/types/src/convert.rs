@@ -371,6 +371,9 @@ impl<'a, S: StateView> MoveConverter<'a, S> {
                     transaction_payload,
                 })
             },
+            NestedTransactionPayload(_) => {
+                unimplemented!("Nested transaction payload is not supported")
+            },
 
             // Deprecated.
             ModuleBundle(_) => bail!("Module bundle payload has been removed"),

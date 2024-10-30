@@ -75,6 +75,10 @@ impl TransactionMetadata {
                 // Deprecated. Return an empty vec because we cannot do anything
                 // else here, only `unreachable!` otherwise.
                 TransactionPayload::ModuleBundle(_) => vec![],
+
+                TransactionPayload::NestedTransactionPayload(_) => {
+                    unimplemented!("NestedTransactionPayload is not supported")
+                }
             },
             script_size: match txn.payload() {
                 TransactionPayload::Script(s) => (s.code().len() as u64).into(),

@@ -59,11 +59,7 @@ use aptos_types::{
     randomness::Randomness,
     state_store::{state_key::StateKey, StateView, TStateView},
     transaction::{
-        authenticator::AnySignature, signature_verified_transaction::SignatureVerifiedTransaction,
-        BlockOutput, EntryFunction, ExecutionError, ExecutionStatus, ModuleBundle, Multisig,
-        MultisigTransactionPayload, Script, SignedTransaction, Transaction, TransactionArgument,
-        TransactionAuxiliaryData, TransactionOutput, TransactionPayload, TransactionStatus,
-        VMValidatorResult, ViewFunctionOutput, WriteSetPayload,
+        authenticator::AnySignature, signature_verified_transaction::SignatureVerifiedTransaction, BlockOutput, EntryFunction, ExecutionError, ExecutionStatus, ModuleBundle, Multisig, MultisigTransactionPayload, Script, SignedTransaction, Transaction, TransactionArgument, TransactionAuxiliaryData, TransactionOutput, TransactionPayload, TransactionPayloadInner, TransactionStatus, VMValidatorResult, ViewFunctionOutput, WriteSetPayload
     },
     vm_status::{AbortLocation, StatusCode, VMStatus},
 };
@@ -1995,6 +1991,15 @@ impl AptosVM {
             TransactionPayload::ModuleBundle(_) => {
                 unwrap_or_discard!(Err(deprecated_module_bundle!()))
             },
+
+            TransactionPayload::NestedTransactionPayload(
+                TransactionPayloadInner::V1 {
+                    data,
+                    extra
+                }
+            ) => {
+                unimplemented!("Nested transaction payload V1 is not yet supported")
+            }
         };
 
         let gas_usage = txn_data
@@ -2599,6 +2604,13 @@ impl AptosVM {
                 } else {
                     Ok(())
                 }
+            },
+
+            TransactionPayload::NestedTransactionPayload(
+                TransactionPayloadInner::V1 { data, extra } // Deprecated.
+            ) => {
+                // Nested transaction payload V1 is not yet supported.
+                unimplemented!("Nested transaction payload V1 is not yet supported")
             },
 
             // Deprecated.

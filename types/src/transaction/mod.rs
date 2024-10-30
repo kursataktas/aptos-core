@@ -82,6 +82,11 @@ use std::{collections::BTreeSet, hash::Hash, ops::Deref, sync::atomic::AtomicU64
 pub type Version = u64; // Height - also used for MVCC in StateDB
 pub type AtomicVersion = AtomicU64;
 
+#[derive(Debug)]
+pub enum ReplayProtector {
+    SequenceNumber(u64),
+    Nonce(u64),
+}
 /// RawTransaction is the portion of a transaction that a client signs.
 #[derive(
     Clone, Debug, Hash, Eq, PartialEq, Serialize, Deserialize, CryptoHasher, BCSCryptoHash,
@@ -139,6 +144,7 @@ impl RawTransaction {
         }
     }
 
+    // TODO: Deprecate this
     /// Create a new `RawTransaction` with a script.
     ///
     /// A script transaction contains only code to execute. No publishing is allowed in scripts.
@@ -162,6 +168,7 @@ impl RawTransaction {
         }
     }
 
+    // TODO: Deprecate this
     /// Create a new `RawTransaction` with an entry function.
     pub fn new_entry_function(
         sender: AccountAddress,
@@ -183,6 +190,7 @@ impl RawTransaction {
         }
     }
 
+    // TODO: Deprecate this
     /// Create a new `RawTransaction` of multisig type.
     pub fn new_multisig(
         sender: AccountAddress,
@@ -201,6 +209,59 @@ impl RawTransaction {
             gas_unit_price,
             expiration_timestamp_secs,
             chain_id,
+        }
+    }
+
+    pub fn new_txn(
+        sender: AccountAddress,
+        replay_protector: ReplayProtector,
+        payload_data: TransactionPayloadData,
+        multisig_address: Option<AccountAddress>,
+        max_gas_amount: u64,
+        gas_unit_price: u64,
+        expiration_timestamp_secs: u64,
+        chain_id: ChainId,
+    ) -> Self {
+        match replay_protector {
+            ReplayProtector::SequenceNumber(sequence_number) => {
+                RawTransaction {
+                    sender,
+                    sequence_number,
+                    payload: TransactionPayload::NestedTransactionPayload(
+                        TransactionPayloadInner::V1 {
+                            data: payload_data,
+                            extra: TransactionPayloadExtra::V1 {
+                                multisig_address,
+                                replay_protection_nonce: None,
+                            },
+                        },
+                    ),
+                    max_gas_amount,
+                    gas_unit_price,
+                    expiration_timestamp_secs,
+                    chain_id,
+                }
+            }
+            ReplayProtector::Nonce(nonce) => {
+                RawTransaction {
+                    sender,
+                    // Question: Is it okay to set sequence_number to u64::MAX for orderless transactions?
+                    sequence_number: u64::MAX,
+                    payload: TransactionPayload::NestedTransactionPayload(
+                        TransactionPayloadInner::V1 {
+                            data: payload_data,
+                            extra: TransactionPayloadExtra::V1 {
+                                multisig_address,
+                                replay_protection_nonce: Some(nonce),
+                            },
+                        },
+                    ),
+                    max_gas_amount,
+                    gas_unit_price,
+                    expiration_timestamp_secs,
+                    chain_id,
+                }
+            }
         }
     }
 
@@ -421,6 +482,32 @@ pub enum TransactionPayload {
     /// A multisig transaction that allows an owner of a multisig account to execute a pre-approved
     /// transaction as the multisig account.
     Multisig(Multisig),
+    NestedTransactionPayload(TransactionPayloadInner),
+}
+
+#[derive(Clone, Debug, Hash, Eq, PartialEq, Serialize, Deserialize)]
+pub enum TransactionPayloadInner {
+    V1 {
+        data: TransactionPayloadData,
+        extra: TransactionPayloadExtra,
+    }
+}
+
+#[derive(Clone, Debug, Hash, Eq, PartialEq, Serialize, Deserialize)]
+pub enum TransactionPayloadData {
+    Script(Script),
+    EntryFunction(EntryFunction),
+}
+
+#[derive(Clone, Debug, Hash, Eq, PartialEq, Serialize, Deserialize)]
+pub enum TransactionPayloadExtra {
+    V1 {
+        // Set for multisig transactions
+        multisig_address: Option<AccountAddress>,
+        // None for regular transactions
+        // Some(nonce) for orderless transactions
+        replay_protection_nonce: Option<u64>,
+    }
 }
 
 impl TransactionPayload {
