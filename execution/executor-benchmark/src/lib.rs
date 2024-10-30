@@ -10,7 +10,6 @@ mod db_reliable_submitter;
 mod ledger_update_stage;
 mod metrics;
 pub mod native;
-pub mod native_executor;
 pub mod pipeline;
 pub mod transaction_committer;
 pub mod transaction_executor;
@@ -770,10 +769,21 @@ fn log_total_supply(db_reader: &Arc<dyn DbReader>) {
 #[cfg(test)]
 mod tests {
     use crate::{
-        db_generator::bootstrap_with_genesis, init_db_and_executor,
-        native::native_config::NativeConfig, native_executor::NativeExecutor,
-        pipeline::PipelineConfig, transaction_executor::BENCHMARKS_BLOCK_EXECUTOR_ONCHAIN_CONFIG,
-        transaction_generator::TransactionGenerator, BenchmarkWorkload,
+        db_generator::bootstrap_with_genesis,
+        init_db_and_executor,
+        native::{
+            aptos_vm_uncoordinated::AptosVMParallelUncoordinatedBlockExecutor,
+            native_config::NativeConfig,
+            native_vm::NativeVMBlockExecutor,
+            parallel_uncoordinated_block_executor::{
+                NativeNoStorageRawTransactionExecutor, NativeParallelUncoordinatedBlockExecutor,
+                NativeRawTransactionExecutor, NativeValueCacheRawTransactionExecutor,
+            },
+        },
+        pipeline::PipelineConfig,
+        transaction_executor::BENCHMARKS_BLOCK_EXECUTOR_ONCHAIN_CONFIG,
+        transaction_generator::TransactionGenerator,
+        BenchmarkWorkload,
     };
     use aptos_config::config::NO_OP_STORAGE_PRUNER_CONFIG;
     use aptos_crypto::HashValue;
@@ -833,7 +843,7 @@ mod tests {
             txn
         };
 
-        let (_native_db, native_executor) = init_db_and_executor::<NativeExecutor>(&config);
+        let (_native_db, native_executor) = init_db_and_executor::<NativeVMBlockExecutor>(&config);
         native_executor
             .execute_and_state_checkpoint(
                 (HashValue::zero(), vec![txn]).into(),
@@ -945,10 +955,10 @@ mod tests {
 
     #[test]
     fn test_benchmark_transaction() {
-        AptosVM::set_num_shards_once(1);
+        AptosVM::set_num_shards_once(4);
         AptosVM::set_concurrency_level_once(4);
         AptosVM::set_processed_transactions_detailed_counters();
-        NativeConfig::set_concurrency_level_once(1);
+        NativeConfig::set_concurrency_level_once(4);
         test_generic_benchmark::<AptosVMBlockExecutor>(
             Some(TransactionTypeArg::ModifyGlobalMilestoneAggV2),
             true,
@@ -956,8 +966,42 @@ mod tests {
     }
 
     #[test]
-    fn test_native_benchmark() {
+    fn test_native_vm_benchmark_transaction() {
+        test_generic_benchmark::<NativeVMBlockExecutor>(
+            Some(TransactionTypeArg::AptFaTransfer),
+            true,
+        );
+    }
+
+    #[test]
+    fn test_aptos_vm_speculative_benchmark() {
+        test_generic_benchmark::<AptosVMParallelUncoordinatedBlockExecutor>(
+            Some(TransactionTypeArg::AptFaTransfer),
+            true,
+        );
+    }
+
+    #[test]
+    fn test_native_loose_block_executor_benchmark() {
         // correct execution not yet implemented, so cannot be checked for validity
-        test_generic_benchmark::<NativeExecutor>(Some(TransactionTypeArg::AptFaTransfer), false);
+        test_generic_benchmark::<
+            NativeParallelUncoordinatedBlockExecutor<NativeRawTransactionExecutor>,
+        >(Some(TransactionTypeArg::AptFaTransfer), false);
+    }
+
+    #[test]
+    fn test_native_value_cache_loose_block_executor_benchmark() {
+        // correct execution not yet implemented, so cannot be checked for validity
+        test_generic_benchmark::<
+            NativeParallelUncoordinatedBlockExecutor<NativeValueCacheRawTransactionExecutor>,
+        >(Some(TransactionTypeArg::AptFaTransfer), false);
+    }
+
+    #[test]
+    fn test_native_direct_raw_loose_block_executor_benchmark() {
+        // correct execution not yet implemented, so cannot be checked for validity
+        test_generic_benchmark::<
+            NativeParallelUncoordinatedBlockExecutor<NativeNoStorageRawTransactionExecutor>,
+        >(Some(TransactionTypeArg::AptFaTransfer), false);
     }
 }

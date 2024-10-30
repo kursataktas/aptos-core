@@ -14,7 +14,16 @@ use aptos_config::config::{
     EpochSnapshotPrunerConfig, LedgerPrunerConfig, PrunerConfig, StateMerklePrunerConfig,
 };
 use aptos_executor_benchmark::{
-    native::native_config::NativeConfig, native_executor::NativeExecutor, pipeline::PipelineConfig,
+    native::{
+        aptos_vm_uncoordinated::AptosVMParallelUncoordinatedBlockExecutor,
+        native_config::NativeConfig,
+        native_vm::NativeVMBlockExecutor,
+        parallel_uncoordinated_block_executor::{
+            NativeNoStorageRawTransactionExecutor, NativeParallelUncoordinatedBlockExecutor,
+            NativeRawTransactionExecutor, NativeValueCacheRawTransactionExecutor,
+        },
+    },
+    pipeline::PipelineConfig,
     BenchmarkWorkload,
 };
 use aptos_executor_service::remote_executor_client;
@@ -209,8 +218,32 @@ struct ProfilerOpt {
 #[derive(Parser, Debug, ValueEnum, Clone, Default)]
 enum BlockExecutorTypeOpt {
     #[default]
+    /// Transaction execution: AptosVM
+    /// Executing conflicts: in the input order, via BlockSTM,
+    /// State: BlockSTM-provided MVHashMap-based view with caching
     AptosVMWithBlockSTM,
-    NativeLooseSpeculative,
+    /// Transaction execution: NativeVM - a simplified rust implemtation to create VMChangeSet,
+    /// Executing conflicts: in the input order, via BlockSTM
+    /// State: BlockSTM-provided MVHashMap-based view with caching
+    NativeVMWithBlockSTM,
+    /// Transaction execution: AptosVM
+    /// Executing conflicts: All transactions execute on the state at the beginning of the block
+    /// State: Raw CachedStateView
+    AptosVMParallelUncoordinated,
+    /// Transaction execution: Native rust code producing WriteSet
+    /// Executing conflicts: All transactions execute on the state at the beginning of the block
+    /// State: Raw CachedStateView
+    NativeParallelUncoordinated,
+    /// Transaction execution: Native rust code updating in-memory state, no WriteSet output
+    /// Executing conflicts: All transactions execute on the state in the first come - first serve basis
+    /// State: In-memory DashMap with rust values of state (i.e. StateKey -> Resource (either Account or FungibleStore)),
+    ///        cached across blocks, filled upon first request
+    NativeValueCacheParallelUncoordinated,
+    /// Transaction execution: Native rust code updating in-memory state, no WriteSet output
+    /// Executing conflicts: All transactions execute on the state in the first come - first serve basis
+    /// State: In-memory DashMap with AccountAddress to seq_num and balance (ignoring all other fields).
+    ///        kept across blocks, randomly initialized on first access, storage ignored.
+    NativeNoStorageParallelUncoordinated,
     PtxExecutor,
 }
 
@@ -586,8 +619,24 @@ fn main() {
         BlockExecutorTypeOpt::AptosVMWithBlockSTM => {
             run::<AptosVMBlockExecutor>(opt);
         },
-        BlockExecutorTypeOpt::NativeLooseSpeculative => {
-            run::<NativeExecutor>(opt);
+        BlockExecutorTypeOpt::NativeVMWithBlockSTM => {
+            run::<NativeVMBlockExecutor>(opt);
+        },
+        BlockExecutorTypeOpt::AptosVMParallelUncoordinated => {
+            run::<AptosVMParallelUncoordinatedBlockExecutor>(opt);
+        },
+        BlockExecutorTypeOpt::NativeParallelUncoordinated => {
+            run::<NativeParallelUncoordinatedBlockExecutor<NativeRawTransactionExecutor>>(opt);
+        },
+        BlockExecutorTypeOpt::NativeValueCacheParallelUncoordinated => {
+            run::<NativeParallelUncoordinatedBlockExecutor<NativeValueCacheRawTransactionExecutor>>(
+                opt,
+            );
+        },
+        BlockExecutorTypeOpt::NativeNoStorageParallelUncoordinated => {
+            run::<NativeParallelUncoordinatedBlockExecutor<NativeNoStorageRawTransactionExecutor>>(
+                opt,
+            );
         },
         BlockExecutorTypeOpt::PtxExecutor => {
             #[cfg(target_os = "linux")]
