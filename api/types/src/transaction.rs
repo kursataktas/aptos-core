@@ -381,6 +381,27 @@ impl From<(SignedTransaction, TransactionPayload)> for PendingTransaction {
     }
 }
 
+// Question: UserTransaction, TransactionInfo, UserTransactionRequest here are also a struct here unfortunately.
+// Two Options:
+// Option 1: If we wish to remove technical debt, we can create Transaction::UserTransactionV2(UserTransactionV2) here.
+//        enum UserTransactionV2 {
+//            V1 {
+//                 info: TransactionInfo,
+//                 request: UserTransactionRequestV2,
+//                 events: Vec<Event>,
+//                 timestamp: U64,
+//             }
+//         }
+//        enum UserTransactionRequestV2 {
+//               V1 {
+//                  Mostly same fields as in UserTransactionRequest. Instead of sequence number, will have a ReplayProtector enum.
+//                  Don't have to change TransactionPayload
+//              }
+//         }
+//        We can eventually deprecate UserTransaction, TransactionInfo, UserTransactionRequest
+// Option 2: Add NestedTransactionPayload variant to TransactionPayload enum.
+// With Option 2, this API will also have a similar structure to RawTransaction::TransactionPayload, which in my opinion is a bit hacky. I prefer Option 1. What do you think?
+
 /// A transaction submitted by a user to change the state of the blockchain
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Object)]
 pub struct UserTransaction {
@@ -496,16 +517,16 @@ pub struct UserTransactionRequest {
     pub signature: Option<TransactionSignature>,
 }
 
-/// Request to create signing messages
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Object)]
-pub struct UserCreateSigningMessageRequest {
-    #[serde(flatten)]
-    #[oai(flatten)]
-    pub transaction: UserTransactionRequest,
-    /// Secondary signer accounts of the request for Multi-agent
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub secondary_signers: Option<Vec<Address>>,
-}
+// /// Request to create signing messages
+// #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Object)]
+// pub struct UserCreateSigningMessageRequest {
+//     #[serde(flatten)]
+//     #[oai(flatten)]
+//     pub transaction: UserTransactionRequest,
+//     /// Secondary signer accounts of the request for Multi-agent
+//     #[serde(skip_serializing_if = "Option::is_none")]
+//     pub secondary_signers: Option<Vec<Address>>,
+// }
 
 /// Request to encode a submission
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Object)]
@@ -928,6 +949,9 @@ pub enum TransactionPayload {
     // ordering, unfortunately.
     ModuleBundlePayload(DeprecatedModuleBundlePayload),
     MultisigPayload(MultisigPayload),
+
+    // Question (as above): Should we add a NestedTransactionPayload variant here like in RawTransaction?
+    // Or should we add UserTransactionV2? I personally feel the former is a hacky solution. I prefer the latter. What do you think?
     NestedTransactionPayload(TransactionPayloadInner)
 }
 

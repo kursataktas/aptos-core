@@ -595,20 +595,22 @@ impl<'a, S: StateView> MoveConverter<'a, S> {
         Ok(ret)
     }
 
-    pub fn try_into_signed_transaction(
-        &self,
-        txn: UserTransactionRequest,
-        chain_id: ChainId,
-    ) -> Result<SignedTransaction> {
-        let signature = txn
-            .signature
-            .clone()
-            .ok_or_else(|| format_err!("missing signature"))?;
-        Ok(SignedTransaction::new_signed_transaction(
-            self.try_into_raw_transaction(txn, chain_id)?,
-            signature.try_into()?,
-        ))
-    }
+
+    // (We are not using this function anywhere)
+    // pub fn try_into_signed_transaction(
+    //     &self,
+    //     txn: UserTransactionRequest,
+    //     chain_id: ChainId,
+    // ) -> Result<SignedTransaction> {
+    //     let signature = txn
+    //         .signature
+    //         .clone()
+    //         .ok_or_else(|| format_err!("missing signature"))?;
+    //     Ok(SignedTransaction::new_signed_transaction(
+    //         self.try_into_raw_transaction(txn, chain_id)?,
+    //         signature.try_into()?,
+    //     ))
+    // }
 
     pub fn try_into_signed_transaction_poem(
         &self,
@@ -624,30 +626,31 @@ impl<'a, S: StateView> MoveConverter<'a, S> {
         ))
     }
 
-    pub fn try_into_raw_transaction(
-        &self,
-        txn: UserTransactionRequest,
-        chain_id: ChainId,
-    ) -> Result<RawTransaction> {
-        let UserTransactionRequest {
-            sender,
-            sequence_number,
-            max_gas_amount,
-            gas_unit_price,
-            expiration_timestamp_secs,
-            payload,
-            signature: _,
-        } = txn;
-        Ok(RawTransaction::new(
-            sender.into(),
-            sequence_number.into(),
-            self.try_into_aptos_core_transaction_payload(payload)?,
-            max_gas_amount.into(),
-            gas_unit_price.into(),
-            expiration_timestamp_secs.into(),
-            chain_id,
-        ))
-    }
+    // (We are not using this function anywhere)
+    // pub fn try_into_raw_transaction(
+    //     &self,
+    //     txn: UserTransactionRequest,
+    //     chain_id: ChainId,
+    // ) -> Result<RawTransaction> {
+    //     let UserTransactionRequest {
+    //         sender,
+    //         sequence_number,
+    //         max_gas_amount,
+    //         gas_unit_price,
+    //         expiration_timestamp_secs,
+    //         payload,
+    //         signature: _,
+    //     } = txn;
+    //     Ok(RawTransaction::new(
+    //         sender.into(),
+    //         sequence_number.into(),
+    //         self.try_into_aptos_core_transaction_payload(payload)?,
+    //         max_gas_amount.into(),
+    //         gas_unit_price.into(),
+    //         expiration_timestamp_secs.into(),
+    //         chain_id,
+    //     ))
+    // }
 
     pub fn try_into_raw_transaction_poem(
         &self,

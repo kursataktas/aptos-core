@@ -515,8 +515,6 @@ pub enum TransactionPayloadExtra {
         // Question: Here, we are allowing multisig transaction to be even a Script.
         // Earlier only an EntryFunction was allowed. Is it okay?
 
-        // Question: For a Multisig payload, earlier, 
-
         // Set for multisig transactions
         multisig_address: Option<AccountAddress>,
         // None for regular transactions
