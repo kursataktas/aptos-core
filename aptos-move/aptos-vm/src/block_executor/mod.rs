@@ -127,7 +127,7 @@ pub struct AptosTransactionOutput {
 }
 
 impl AptosTransactionOutput {
-    pub(crate) fn new(output: VMOutput) -> Self {
+    pub fn new(output: VMOutput) -> Self {
         Self {
             vm_output: Mutex::new(Some(output)),
             committed_output: OnceCell::new(),
@@ -138,7 +138,7 @@ impl AptosTransactionOutput {
         self.committed_output.get().unwrap()
     }
 
-    fn take_output(mut self) -> TransactionOutput {
+    pub fn take_output(mut self) -> TransactionOutput {
         match self.committed_output.take() {
             Some(output) => output,
             // TODO: revisit whether we should always get it via committed, or o.w. create a
