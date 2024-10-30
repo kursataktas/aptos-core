@@ -924,12 +924,11 @@ pub enum GenesisPayload {
 pub enum TransactionPayload {
     EntryFunctionPayload(EntryFunctionPayload),
     ScriptPayload(ScriptPayload),
-
     // Deprecated. We cannot remove the enum variant because it breaks the
     // ordering, unfortunately.
     ModuleBundlePayload(DeprecatedModuleBundlePayload),
-
     MultisigPayload(MultisigPayload),
+    NestedTransactionPayload(TransactionPayloadInner)
 }
 
 impl VerifyInput for TransactionPayload {
@@ -942,6 +941,9 @@ impl VerifyInput for TransactionPayload {
             // Deprecated.
             TransactionPayload::ModuleBundlePayload(_) => {
                 bail!("Module bundle payload has been removed")
+            },
+            TransactionPayload::NestedTransactionPayload(_) => {
+                unimplemented!("Nested transaction payload is not supported")
             },
         }
     }
@@ -1006,6 +1008,46 @@ impl TryFrom<Script> for ScriptPayload {
         })
     }
 }
+
+pub enum TransactionPayloadData {
+    EntryFunctionPayload(EntryFunctionPayload),
+    ScriptPayload(ScriptPayload),
+}
+
+impl VerifyInput for TransactionPayloadData {
+    fn verify(&self) -> anyhow::Result<()> {
+        match self {
+            TransactionPayloadData::EntryFunctionPayload(inner) => inner.verify(),
+            TransactionPayloadData::ScriptPayload(inner) => inner.verify(),
+        }
+    }
+}
+
+pub enum TransactionPayloadExtra {
+    V1 {
+        multisig_address: Option<Address>,
+        replay_protection_nonce: Option<u64>,
+    }
+}
+
+pub enum TransactionPayloadInner {
+    V1 {
+        data: TransactionPayloadData,
+        extra: TransactionPayloadExtra,
+    }
+}
+
+impl VerifyInput for TransactionPayloadInner {
+    fn verify(&self) -> anyhow::Result<()> {
+        match self {
+            TransactionPayloadInner::V1 { data, extra } => {
+                data.verify()?;
+                extra.verify()
+            },
+        }
+    }
+}
+
 
 // We use an enum here for extensibility so we can add Script payload support
 // in the future for example.
