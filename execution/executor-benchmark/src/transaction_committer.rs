@@ -6,7 +6,7 @@ use crate::{metrics::NUM_TXNS, pipeline::CommitBlockMessage};
 use aptos_crypto::hash::HashValue;
 use aptos_db::metrics::API_LATENCY_SECONDS;
 use aptos_executor::{
-    block_executor::{BlockExecutor, TransactionBlockExecutor},
+    block_executor::BlockExecutor,
     metrics::{BLOCK_EXECUTOR_EXECUTE_BLOCK, COMMIT_BLOCKS, EXECUTE_BLOCK},
 };
 use aptos_executor_types::BlockExecutorTrait;
@@ -17,6 +17,7 @@ use aptos_types::{
     ledger_info::{LedgerInfo, LedgerInfoWithSignatures},
     transaction::Version,
 };
+use aptos_vm::VMBlockExecutor;
 use std::{
     sync::{mpsc, Arc},
     time::{Duration, Instant},
@@ -52,7 +53,7 @@ pub struct TransactionCommitter<V> {
 
 impl<V> TransactionCommitter<V>
 where
-    V: TransactionBlockExecutor,
+    V: VMBlockExecutor,
 {
     pub fn new(
         executor: Arc<BlockExecutor<V>>,
