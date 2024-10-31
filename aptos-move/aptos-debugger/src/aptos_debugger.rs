@@ -141,8 +141,8 @@ impl AptosDebugger {
                     ),
                     TransactionPayload::Multisig(..) => unimplemented!("not supported yet"),
 
-                    TransactionPayload::NestedTransactionPayload(_) => {
-                        unimplemented!("NestedTransactionPayload is not supported")
+                    TransactionPayload::TransactionPayloadV2(_) => {
+                        unimplemented!("TransactionPayloadV2 is not supported")
                     },
                     
                     // Deprecated.
@@ -389,8 +389,8 @@ fn print_transaction_stats(sig_verified_txns: &[SignatureVerifiedTransaction], v
                     TransactionPayload::Script(_) => "script".to_string(),
                     TransactionPayload::ModuleBundle(_) => panic!("deprecated module bundle"),
                     TransactionPayload::Multisig(_) => "multisig".to_string(),
-                    TransactionPayload::NestedTransactionPayload(_) => {
-                        unimplemented!("NestedTransactionPayload is not supported")
+                    TransactionPayload::TransactionPayloadV2(_) => {
+                        unimplemented!("TransactionPayloadV2 is not supported")
                     },
                 })
         })

@@ -1,7 +1,7 @@
 // Copyright (c) Aptos Foundation
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::transaction::{SignedTransaction, TransactionPayloadData, TransactionPayloadInner};
+use crate::transaction::{SignedTransaction, TransactionPayloadData, TransactionPayloadV2};
 use move_core_types::account_address::AccountAddress;
 
 #[derive(Clone, Eq, Hash, PartialEq)]
@@ -50,8 +50,8 @@ impl UseCaseAwareTransaction for SignedTransaction {
                     ContractAddress(*module_id.address())
                 }
             },
-            NestedTransactionPayload(
-                TransactionPayloadInner::V1 {
+            TransactionPayloadV2(
+                TransactionPayloadV2::V1 {
                     data: TransactionPayloadData::EntryFunction(entry_fun),
                     extra: _,
                 }

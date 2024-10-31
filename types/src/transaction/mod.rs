@@ -227,11 +227,10 @@ impl RawTransaction {
                 RawTransaction {
                     sender,
                     sequence_number,
-                    payload: TransactionPayload::NestedTransactionPayload(
-                        TransactionPayloadInner::V1 {
+                    payload: TransactionPayload::TransactionPayloadV2(
+                        TransactionPayloadV2::V1 {
                             data: payload_data,
                             extra: TransactionPayloadExtra::V1 {
-                                multisig_address,
                                 replay_protection_nonce: None,
                             },
                         },
@@ -247,11 +246,10 @@ impl RawTransaction {
                     sender,
                     // Question: Is it okay to set sequence_number to u64::MAX for orderless transactions?
                     sequence_number: u64::MAX,
-                    payload: TransactionPayload::NestedTransactionPayload(
-                        TransactionPayloadInner::V1 {
+                    payload: TransactionPayload::TransactionPayloadV2(
+                        TransactionPayloadV2::V1 {
                             data: payload_data,
                             extra: TransactionPayloadExtra::V1 {
-                                multisig_address,
                                 replay_protection_nonce: Some(nonce),
                             },
                         },
@@ -484,11 +482,11 @@ pub enum TransactionPayload {
     Multisig(Multisig),
 
     /// Question: Any better name for this variant?
-    NestedTransactionPayload(TransactionPayloadInner),
+    TransactionPayloadV2(TransactionPayloadV2),
 }
 
 #[derive(Clone, Debug, Hash, Eq, PartialEq, Serialize, Deserialize)]
-pub enum TransactionPayloadInner {
+pub enum TransactionPayloadV2 {
     V1 {
         data: TransactionPayloadData,
         extra: TransactionPayloadExtra,
@@ -499,24 +497,12 @@ pub enum TransactionPayloadInner {
 pub enum TransactionPayloadData {
     Script(Script),
     EntryFunction(EntryFunction),
-    // Question: Earlier, for a multisig transaction, having MultiSigPayload was optional.
-    // This variant is introduced so that we can have empty payload for MultiSig transactions. Is this okay?
-    
-    // Question: We need to ensure that the payload is only empty for multisig transactions
-    // i.e., when `multisig_address` is Some(..) which feels clunky. Instead of separating multisig transaction
-    // into TransactionPayloadData and TransactionPayloadExtra, can we just have a separate variant for multisig
-    // transactions like earlier?
-    Empty,
+    Multisig(Multisig),
 }
 
 #[derive(Clone, Debug, Hash, Eq, PartialEq, Serialize, Deserialize)]
 pub enum TransactionPayloadExtra {
     V1 {
-        // Question: Here, we are allowing multisig transaction to be even a Script.
-        // Earlier only an EntryFunction was allowed. Is it okay?
-
-        // Set for multisig transactions
-        multisig_address: Option<AccountAddress>,
         // None for regular transactions
         // Some(nonce) for orderless transactions
         replay_protection_nonce: Option<u64>,

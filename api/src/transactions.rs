@@ -1105,8 +1105,8 @@ impl TransactionsApi {
                             ledger_info,
                         ))
                     },
-                    TransactionPayload::NestedTransactionPayload(_) => {
-                        unimplemented!("NestedTransactionPayload is not supported")
+                    TransactionPayload::TransactionPayloadV2(_) => {
+                        unimplemented!("TransactionPayloadV2 is not supported")
                     }
                 }
                 // TODO: Verify script args?
@@ -1425,8 +1425,8 @@ impl TransactionsApi {
                     "Multisig::unknown".to_string()
                 }
             },
-            TransactionPayload::NestedTransactionPayload(_) => {
-                unimplemented!("NestedTransactionPayload is not supported")
+            TransactionPayload::TransactionPayloadV2(_) => {
+                unimplemented!("TransactionPayloadV2 is not supported")
             },
         };
         self.context

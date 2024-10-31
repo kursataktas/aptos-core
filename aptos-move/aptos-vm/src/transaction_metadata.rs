@@ -76,8 +76,8 @@ impl TransactionMetadata {
                 // else here, only `unreachable!` otherwise.
                 TransactionPayload::ModuleBundle(_) => vec![],
 
-                TransactionPayload::NestedTransactionPayload(_) => {
-                    unimplemented!("NestedTransactionPayload is not supported")
+                TransactionPayload::TransactionPayloadV2(_) => {
+                    unimplemented!("TransactionPayloadV2 is not supported")
                 }
             },
             script_size: match txn.payload() {

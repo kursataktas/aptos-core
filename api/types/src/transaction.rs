@@ -399,7 +399,7 @@ impl From<(SignedTransaction, TransactionPayload)> for PendingTransaction {
 //              }
 //         }
 //        We can eventually deprecate UserTransaction, TransactionInfo, UserTransactionRequest
-// Option 2: Add NestedTransactionPayload variant to TransactionPayload enum.
+// Option 2: Add TransactionPayloadV2 variant to TransactionPayload enum.
 // With Option 2, this API will also have a similar structure to RawTransaction::TransactionPayload, which in my opinion is a bit hacky. I prefer Option 1. What do you think?
 
 /// A transaction submitted by a user to change the state of the blockchain
@@ -487,6 +487,9 @@ pub struct UserTransactionRequestInner {
     pub gas_unit_price: U64,
     pub expiration_timestamp_secs: U64,
     pub payload: TransactionPayload,
+    // Question: Is it a good idea to add nonce here, and let `try_into_signed_transaction_poem` convert 
+    // the nonce into TransactionPayload::raw_
+    pub nonce: Option<U64>,
 }
 
 impl VerifyInput for UserTransactionRequestInner {
@@ -951,9 +954,9 @@ pub enum TransactionPayload {
     ModuleBundlePayload(DeprecatedModuleBundlePayload),
     MultisigPayload(MultisigPayload),
 
-    // Question (as above): Should we add a NestedTransactionPayload variant here like in RawTransaction?
+    // Question (as above): Should we add a TransactionPayloadV2 variant here like in RawTransaction?
     // Or should we add UserTransactionV2? I personally feel the former is a hacky solution. I prefer the latter. What do you think?
-    NestedTransactionPayload(TransactionPayloadInner)
+    TransactionPayloadV2(TransactionPayloadV2)
 }
 
 impl VerifyInput for TransactionPayload {
@@ -967,7 +970,7 @@ impl VerifyInput for TransactionPayload {
             TransactionPayload::ModuleBundlePayload(_) => {
                 bail!("Module bundle payload has been removed")
             },
-            TransactionPayload::NestedTransactionPayload(_) => {
+            TransactionPayload::TransactionPayloadV2(_) => {
                 unimplemented!("Nested transaction payload is not supported")
             },
         }
@@ -1055,17 +1058,17 @@ pub enum TransactionPayloadExtra {
     }
 }
 
-pub enum TransactionPayloadInner {
+pub enum TransactionPayloadV2 {
     V1 {
         data: TransactionPayloadData,
         extra: TransactionPayloadExtra,
     }
 }
 
-impl VerifyInput for TransactionPayloadInner {
+impl VerifyInput for TransactionPayloadV2 {
     fn verify(&self) -> anyhow::Result<()> {
         match self {
-            TransactionPayloadInner::V1 { data, extra } => {
+            TransactionPayloadV2::V1 { data, extra } => {
                 data.verify()?;
                 extra.verify()
             },

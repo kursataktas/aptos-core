@@ -11,7 +11,7 @@ use aptos_metrics_core::{
 use aptos_types::{
     contract_event::ContractEvent,
     transaction::{
-        authenticator::AccountAuthenticator, signature_verified_transaction::TransactionProvider, ExecutionStatus, Transaction, TransactionOutput, TransactionPayloadData, TransactionPayloadExtra, TransactionPayloadInner, TransactionStatus
+        authenticator::AccountAuthenticator, signature_verified_transaction::TransactionProvider, ExecutionStatus, Transaction, TransactionOutput, TransactionPayloadData, TransactionPayloadExtra, TransactionPayloadV2, TransactionStatus
     },
 };
 use aptos_vm::AptosVM;
@@ -475,8 +475,8 @@ pub fn update_counters_for_processed_chunk<T>(
                         .inc();
                 },
 
-                aptos_types::transaction::TransactionPayload::NestedTransactionPayload(
-                    TransactionPayloadInner::V1 { 
+                aptos_types::transaction::TransactionPayload::TransactionPayloadV2(
+                    TransactionPayloadV2::V1 { 
                         data,
                         extra: TransactionPayloadExtra:: V1 {
                             multisig_address,

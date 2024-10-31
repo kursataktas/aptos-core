@@ -371,7 +371,7 @@ impl<'a, S: StateView> MoveConverter<'a, S> {
                     transaction_payload,
                 })
             },
-            NestedTransactionPayload(_) => {
+            TransactionPayloadV2(_) => {
                 unimplemented!("Nested transaction payload is not supported")
             },
 
