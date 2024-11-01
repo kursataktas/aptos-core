@@ -61,8 +61,8 @@ impl StatelessPipeline for ExecutionSchedulePhase {
 
     async fn process(&self, req: ExecutionRequest) -> ExecutionWaitRequest {
         let ExecutionRequest {
-            ordered_blocks,
-            lifetime_guard,
+            mut ordered_blocks,
+            lifetime_guard: _,
         } = req;
 
         let block_id = match ordered_blocks.last() {
@@ -77,31 +77,55 @@ impl StatelessPipeline for ExecutionSchedulePhase {
 
         // Call schedule_compute() for each block here (not in the fut being returned) to
         // make sure they are scheduled in order.
-        let mut futs = vec![];
-        for b in &ordered_blocks {
-            let fut = self
-                .execution_proxy
-                .schedule_compute(
-                    b.block(),
-                    b.parent_id(),
-                    b.randomness().cloned(),
-                    lifetime_guard.spawn(()),
-                )
-                .await;
-            futs.push(fut)
-        }
+        // let mut futs = vec![];
+        // for b in &ordered_blocks {
+        //     let fut = self
+        //         .execution_proxy
+        //         .schedule_compute(
+        //             b.block(),
+        //             b.parent_id(),
+        //             b.randomness().cloned(),
+        //             lifetime_guard.spawn(()),
+        //         )
+        //         .await;
+        //     let fut = b.pipeline_fut().unwrap().ledger_update_fut.clone();
+        //     futs.push(fut)
+        // }
 
         // In the future being returned, wait for the compute results in order.
-        let fut = tokio::task::spawn(async move {
-            let mut results = vec![];
-            for (block, fut) in itertools::zip_eq(ordered_blocks, futs) {
-                debug!("try to receive compute result for block {}", block.id());
-                results.push(block.set_execution_result(fut.await?));
+        // let fut = tokio::task::spawn(async move {
+        // let mut results = vec![];
+        // for (block, fut) in itertools::zip_eq(ordered_blocks, futs) {
+        //     debug!("try to receive compute result for block {}", block.id());
+        //     results.push(block.set_execution_result(fut.await?));
+        // }
+        // Ok(results)
+        // })
+        // .map_err(ExecutorError::internal_err)
+        // .and_then(|res| async { res });
+        for b in &ordered_blocks {
+            if let Some(tx) = b.pipeline_tx().unwrap().lock().rand_tx.take() {
+                let _ = tx.send(b.randomness().cloned());
+            } else {
+                println!("?????????????????");
             }
-            Ok(results)
-        })
-        .map_err(ExecutorError::internal_err)
-        .and_then(|res| async { res });
+        }
+
+        let fut = async move {
+            for b in ordered_blocks.iter_mut() {
+                let (compute_result, _) = b
+                    .pipeline_fut()
+                    .unwrap()
+                    .ledger_update_fut
+                    .clone()
+                    .await
+                    .map_err(|_| ExecutorError::InternalError {
+                        error: "lalala".to_string(),
+                    })?;
+                b.set_compute_result(compute_result);
+            }
+            Ok(ordered_blocks)
+        };
 
         ExecutionWaitRequest {
             block_id,

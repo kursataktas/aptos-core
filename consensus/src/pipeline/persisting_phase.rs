@@ -65,13 +65,24 @@ impl StatelessPipeline for PersistingPhase {
         let PersistingRequest {
             blocks,
             commit_ledger_info,
-            callback,
+            callback: _,
         } = req;
-        let round = commit_ledger_info.ledger_info().round();
+        // let round = commit_ledger_info.ledger_info().round();
 
-        self.persisting_handle
-            .commit(&blocks, commit_ledger_info, callback)
-            .await
-            .map(|_| round)
+        for b in &blocks {
+            let _ = b
+                .pipeline_tx()
+                .unwrap()
+                .lock()
+                .commit_proof_tx
+                .send(commit_ledger_info.clone());
+            let _ = b.pipeline_fut().unwrap().commit_ledger_fut.clone().await;
+        }
+
+        Ok(blocks.last().unwrap().round())
+        // self.persisting_handle
+        //     .commit(&blocks, commit_ledger_info, callback)
+        //     .await
+        //     .map(|_| round)
     }
 }

@@ -14,7 +14,7 @@ use crate::{
     persistent_liveness_storage::{
         PersistentLivenessStorage, RecoveryData, RootInfo, RootMetadata,
     },
-    pipeline::execution_client::TExecutionClient,
+    pipeline::{execution_client::TExecutionClient, pipeline_builder::PipelineBuilder},
     util::time_service::TimeService,
 };
 use anyhow::{bail, ensure, format_err, Context};
@@ -88,6 +88,7 @@ pub struct BlockStore {
     back_pressure_for_test: AtomicBool,
     order_vote_enabled: bool,
     pending_blocks: Arc<Mutex<PendingBlocks>>,
+    pipeline_builder: PipelineBuilder,
 }
 
 impl BlockStore {
@@ -101,6 +102,7 @@ impl BlockStore {
         payload_manager: Arc<dyn TPayloadManager>,
         order_vote_enabled: bool,
         pending_blocks: Arc<Mutex<PendingBlocks>>,
+        pipeline_builder: PipelineBuilder,
     ) -> Self {
         let highest_2chain_tc = initial_data.highest_2chain_timeout_certificate();
         let (root, root_metadata, blocks, quorum_certs) = initial_data.take();
@@ -118,6 +120,8 @@ impl BlockStore {
             payload_manager,
             order_vote_enabled,
             pending_blocks,
+            pipeline_builder,
+            None,
         ));
         block_on(block_store.try_send_for_execution());
         block_store
@@ -156,6 +160,8 @@ impl BlockStore {
         payload_manager: Arc<dyn TPayloadManager>,
         order_vote_enabled: bool,
         pending_blocks: Arc<Mutex<PendingBlocks>>,
+        pipeline_builder: PipelineBuilder,
+        tree_to_replace: Option<Arc<RwLock<BlockTree>>>,
     ) -> Self {
         let RootInfo(root_block, root_qc, root_ordered_cert, root_commit_cert) = root;
 
@@ -186,12 +192,16 @@ impl BlockStore {
         ));
         assert_eq!(result.root_hash(), root_metadata.accu_hash);
 
-        let pipelined_root_block = PipelinedBlock::new(
+        let mut pipelined_root_block = PipelinedBlock::new(
             *root_block,
             vec![],
             // Create a dummy state_compute_result with necessary fields filled in.
-            result,
+            result.clone(),
         );
+
+        let pipeline_fut =
+            pipeline_builder.build_root(result, root_commit_cert.ledger_info().clone());
+        pipelined_root_block.set_pipeline_fut(pipeline_fut);
 
         let tree = BlockTree::new(
             pipelined_root_block,
@@ -201,9 +211,15 @@ impl BlockStore {
             max_pruned_blocks_in_mem,
             highest_2chain_timeout_cert.map(Arc::new),
         );
+        let inner = if let Some(tree_to_replace) = tree_to_replace {
+            *tree_to_replace.write() = tree;
+            tree_to_replace
+        } else {
+            Arc::new(RwLock::new(tree))
+        };
 
         let block_store = Self {
-            inner: Arc::new(RwLock::new(tree)),
+            inner,
             execution_client,
             storage,
             time_service,
@@ -213,6 +229,7 @@ impl BlockStore {
             back_pressure_for_test: AtomicBool::new(false),
             order_vote_enabled,
             pending_blocks,
+            pipeline_builder,
         };
 
         for block in blocks {
@@ -253,6 +270,12 @@ impl BlockStore {
             .unwrap_or_default();
 
         assert!(!blocks_to_commit.is_empty());
+
+        // send order proof to pipeline
+        for block in &blocks_to_commit {
+            let pipeline_tx = block.pipeline_tx().unwrap().lock();
+            let _ = pipeline_tx.order_proof_tx.send(());
+        }
 
         let block_tree = self.inner.clone();
         let storage = self.storage.clone();
@@ -324,13 +347,11 @@ impl BlockStore {
             self.payload_manager.clone(),
             self.order_vote_enabled,
             self.pending_blocks.clone(),
+            self.pipeline_builder.clone(),
+            Some(self.inner.clone()),
         )
         .await;
 
-        // Unwrap the new tree and replace the existing tree.
-        *self.inner.write() = Arc::try_unwrap(inner)
-            .unwrap_or_else(|_| panic!("New block tree is not shared"))
-            .into_inner();
         self.try_send_for_execution().await;
     }
 
@@ -351,7 +372,37 @@ impl BlockStore {
             "Block with old round"
         );
 
-        let pipelined_block = PipelinedBlock::new_ordered(block.clone());
+        if let Some(payload) = block.payload() {
+            self.payload_manager
+                .prefetch_payload_data(payload, block.timestamp_usecs());
+        }
+
+        let mut pipelined_block = PipelinedBlock::new_ordered(block.clone());
+
+        // build pipeline
+        let parent_block = self
+            .get_block(block.parent_id())
+            .ok_or_else(|| anyhow::anyhow!("Parent block not found"))?;
+
+        let block_tree = Arc::downgrade(&self.inner);
+        let storage = self.storage.clone();
+        let id = block.id();
+        let round = block.round();
+        let callback = Box::new(move |commit_decision: LedgerInfoWithSignatures| {
+            if let Some(tree) = block_tree.upgrade() {
+                tree.write()
+                    .commit_callback_v2(storage, id, round, commit_decision);
+            }
+        });
+        let (fut, tx, abort_handles) = self.pipeline_builder.build(
+            parent_block.pipeline_fut().unwrap(),
+            Arc::new(block),
+            callback,
+        );
+        pipelined_block.set_pipeline_fut(fut);
+        pipelined_block.set_pipeline_tx(tx);
+        pipelined_block.set_pipeline_abort_handles(abort_handles);
+
         // ensure local time past the block time
         let block_time = Duration::from_micros(pipelined_block.timestamp_usecs());
         let current_timestamp = self.time_service.get_current_timestamp();
@@ -364,10 +415,6 @@ impl BlockStore {
                 );
             }
             self.time_service.wait_until(block_time).await;
-        }
-        if let Some(payload) = pipelined_block.block().payload() {
-            self.payload_manager
-                .prefetch_payload_data(payload, pipelined_block.block().timestamp_usecs());
         }
         self.storage
             .save_tree(vec![pipelined_block.block().clone()], vec![])

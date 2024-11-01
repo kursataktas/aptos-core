@@ -11,7 +11,8 @@ use crate::{
 use anyhow::bail;
 use aptos_consensus_types::{
     pipelined_block::PipelinedBlock, quorum_cert::QuorumCert,
-    timeout_2chain::TwoChainTimeoutCertificate, wrapped_ledger_info::WrappedLedgerInfo,
+    timeout_2chain::TwoChainTimeoutCertificate, vote_data::VoteData,
+    wrapped_ledger_info::WrappedLedgerInfo,
 };
 use aptos_crypto::HashValue;
 use aptos_logger::prelude::*;
@@ -485,17 +486,15 @@ impl BlockTree {
         storage: Arc<dyn PersistentLivenessStorage>,
         block_id: HashValue,
         block_round: Round,
-        finality_proof: WrappedLedgerInfo,
         commit_decision: LedgerInfoWithSignatures,
     ) {
-        let commit_proof = finality_proof
-            .create_merged_with_executed_state(commit_decision)
-            .expect("Inconsistent commit proof and evaluation decision, cannot commit block");
-
-        // let block_to_commit = blocks_to_commit.last().expect("pipeline is empty").clone();
-        // update_counters_for_committed_blocks(blocks_to_commit);
         let current_round = self.commit_root().round();
         let committed_round = block_round;
+        if current_round == committed_round {
+            return;
+        }
+        let commit_proof = WrappedLedgerInfo::new(VoteData::dummy(), commit_decision);
+
         debug!(
             LogSchema::new(LogEvent::CommitViaBlock).round(current_round),
             committed_round = committed_round,

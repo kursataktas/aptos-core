@@ -473,6 +473,7 @@ impl BufferManager {
             let request = self.create_new_request(SigningRequest {
                 ordered_ledger_info: executed_item.ordered_proof.clone(),
                 commit_ledger_info: executed_item.partial_commit_proof.data().clone(),
+                blocks: executed_item.executed_blocks.clone(),
             });
             if cursor == self.signing_root {
                 let sender = self.signing_phase_tx.clone();
@@ -557,6 +558,12 @@ impl BufferManager {
     /// Internal requests are managed with ongoing_tasks.
     /// Incoming ordered blocks are pulled, it should only have existing blocks but no new blocks until reset finishes.
     async fn reset(&mut self) {
+        while let Some(item) = self.buffer.pop_front() {
+            for b in item.get_blocks() {
+                b.abort_pipeline();
+                b.wait_until_complete().await;
+            }
+        }
         self.buffer = Buffer::new();
         self.execution_root = None;
         self.signing_root = None;
@@ -976,22 +983,22 @@ impl BufferManager {
                     self.process_execution_response(response).await;
                     if let Some(block_id) = self.advance_execution_root() {
                         // if the response is for the current execution root, retry the schedule phase
-                        if response_block_id == block_id {
-                            let mut tx = self.execution_schedule_retry_tx.clone();
-                            tokio::spawn(async move {
-                                tokio::time::sleep(Duration::from_millis(100)).await;
-                                // buffer manager can be dropped at the point of sending retry
-                                let _ = tx.send(()).await;
-                            });
-                        }
+                        // if response_block_id == block_id {
+                        //     let mut tx = self.execution_schedule_retry_tx.clone();
+                        //     tokio::spawn(async move {
+                        //         tokio::time::sleep(Duration::from_millis(100)).await;
+                        //         // buffer manager can be dropped at the point of sending retry
+                        //         let _ = tx.send(()).await;
+                        //     });
+                        // }
                     }
                     if self.signing_root.is_none() {
                         self.advance_signing_root().await;
                     }});
                 },
                 _ = self.execution_schedule_retry_rx.next() => {
-                    monitor!("buffer_manager_process_execution_schedule_retry",
-                    self.retry_schedule_phase().await);
+                    // monitor!("buffer_manager_process_execution_schedule_retry",
+                    // self.retry_schedule_phase().await);
                 },
                 Some(response) = self.signing_phase_rx.next() => {
                     monitor!("buffer_manager_process_signing_response", {

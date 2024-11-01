@@ -6,13 +6,15 @@ use crate::{
     block::Block,
     common::{Payload, Round},
     order_vote_proposal::OrderVoteProposal,
-    pipeline::commit_vote::CommitVote,
     pipeline_execution_result::PipelineExecutionResult,
     quorum_cert::QuorumCert,
     vote_proposal::VoteProposal,
 };
 use anyhow::Error;
-use aptos_crypto::hash::{HashValue, ACCUMULATOR_PLACEHOLDER_HASH};
+use aptos_crypto::{
+    bls12381,
+    hash::{HashValue, ACCUMULATOR_PLACEHOLDER_HASH},
+};
 use aptos_executor_types::{state_compute_result::StateComputeResult, ExecutorResult};
 use aptos_infallible::Mutex;
 use aptos_logger::{error, warn};
@@ -36,9 +38,12 @@ use std::{
     sync::Arc,
     time::{Duration, Instant},
 };
-use tokio::{sync::oneshot, task::JoinError};
+use tokio::{
+    sync::oneshot,
+    task::{AbortHandle, JoinError},
+};
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum TaskError {
     JoinError(Arc<JoinError>),
     InternalError(Arc<Error>),
@@ -61,21 +66,32 @@ impl From<Error> for TaskError {
 pub type TaskResult<T> = Result<T, TaskError>;
 pub type TaskFuture<T> = Shared<BoxFuture<'static, TaskResult<T>>>;
 
+pub type PrepareResult = Arc<Vec<SignatureVerifiedTransaction>>;
+pub type ExecuteResult = ();
+pub type LedgerUpdateResult = (StateComputeResult, Option<u64>);
+pub type PostLedgerUpdateResult = ();
+pub type CommitVoteResult = bls12381::Signature;
+pub type PreCommitResult = StateComputeResult;
+pub type PostPreCommitResult = ();
+pub type CommitLedgerResult = Option<LedgerInfoWithSignatures>;
+pub type PostCommitResult = ();
+
+#[derive(Clone)]
 pub struct PipelineFutures {
-    pub prepare_fut: TaskFuture<Vec<SignatureVerifiedTransaction>>,
-    pub execute_fut: TaskFuture<()>,
-    pub ledger_update_fut: TaskFuture<StateComputeResult>,
-    pub post_ledger_update_fut: TaskFuture<()>,
-    pub commit_vote_fut: TaskFuture<CommitVote>,
-    pub pre_commit_fut: TaskFuture<StateComputeResult>,
-    pub post_pre_commit_fut: TaskFuture<()>,
-    pub commit_ledger_fut: TaskFuture<LedgerInfoWithSignatures>,
-    pub post_commit_fut: TaskFuture<()>,
+    pub prepare_fut: TaskFuture<PrepareResult>,
+    pub execute_fut: TaskFuture<ExecuteResult>,
+    pub ledger_update_fut: TaskFuture<LedgerUpdateResult>,
+    pub post_ledger_update_fut: TaskFuture<PostLedgerUpdateResult>,
+    pub commit_vote_fut: TaskFuture<CommitVoteResult>,
+    pub pre_commit_fut: TaskFuture<PreCommitResult>,
+    pub post_pre_commit_fut: TaskFuture<PostPreCommitResult>,
+    pub commit_ledger_fut: TaskFuture<CommitLedgerResult>,
+    pub post_commit_fut: TaskFuture<PostCommitResult>,
 }
 
 pub struct PipelineTx {
-    pub rand_tx: oneshot::Sender<Option<Randomness>>,
-    pub order_vote_tx: oneshot::Sender<()>,
+    pub rand_tx: Option<oneshot::Sender<Option<Randomness>>>,
+    pub order_vote_tx: Option<oneshot::Sender<()>>,
     pub order_proof_tx: tokio::sync::broadcast::Sender<()>,
     pub commit_proof_tx: tokio::sync::broadcast::Sender<LedgerInfoWithSignatures>,
 }
@@ -108,6 +124,12 @@ pub struct PipelinedBlock {
     #[derivative(PartialEq = "ignore")]
     pre_commit_fut: Arc<Mutex<Option<BoxFuture<'static, ExecutorResult<()>>>>>,
     // pipeline related fields
+    #[derivative(PartialEq = "ignore")]
+    pipeline_futures: Option<PipelineFutures>,
+    #[derivative(PartialEq = "ignore")]
+    pipeline_tx: Option<Arc<Mutex<PipelineTx>>>,
+    #[derivative(PartialEq = "ignore")]
+    pipeline_abort_handle: Option<Vec<AbortHandle>>,
 }
 
 impl Serialize for PipelinedBlock {
@@ -151,15 +173,7 @@ impl<'de> Deserialize<'de> for PipelinedBlock {
             randomness,
         } = SerializedBlock::deserialize(deserializer)?;
 
-        let block = PipelinedBlock {
-            block,
-            input_transactions,
-            state_compute_result: StateComputeResult::new_dummy(),
-            randomness: OnceCell::new(),
-            pipeline_insertion_time: OnceCell::new(),
-            execution_summary: Arc::new(OnceCell::new()),
-            pre_commit_fut: Arc::new(Mutex::new(None)),
-        };
+        let block = PipelinedBlock::new(block, input_transactions, StateComputeResult::new_dummy());
         if let Some(r) = randomness {
             block.set_randomness(r);
         }
@@ -168,6 +182,10 @@ impl<'de> Deserialize<'de> for PipelinedBlock {
 }
 
 impl PipelinedBlock {
+    pub fn set_compute_result(&mut self, compute_result: StateComputeResult) {
+        self.state_compute_result = compute_result;
+    }
+
     pub fn set_execution_result(
         mut self,
         pipeline_execution_result: PipelineExecutionResult,
@@ -234,7 +252,7 @@ impl PipelinedBlock {
     }
 
     pub fn set_randomness(&self, randomness: Randomness) {
-        assert!(self.randomness.set(randomness).is_ok());
+        assert!(self.randomness.set(randomness.clone()).is_ok());
     }
 
     pub fn set_insertion_time(&self) {
@@ -275,19 +293,14 @@ impl PipelinedBlock {
             pipeline_insertion_time: OnceCell::new(),
             execution_summary: Arc::new(OnceCell::new()),
             pre_commit_fut: Arc::new(Mutex::new(None)),
+            pipeline_futures: None,
+            pipeline_tx: None,
+            pipeline_abort_handle: None,
         }
     }
 
     pub fn new_ordered(block: Block) -> Self {
-        Self {
-            block,
-            input_transactions: vec![],
-            state_compute_result: StateComputeResult::new_dummy(),
-            randomness: OnceCell::new(),
-            pipeline_insertion_time: OnceCell::new(),
-            execution_summary: Arc::new(OnceCell::new()),
-            pre_commit_fut: Arc::new(Mutex::new(None)),
-        }
+        Self::new(block, vec![], StateComputeResult::new_dummy())
     }
 
     pub fn block(&self) -> &Block {
@@ -387,6 +400,44 @@ impl PipelinedBlock {
 
     pub fn get_execution_summary(&self) -> Option<ExecutionSummary> {
         self.execution_summary.get().cloned()
+    }
+
+    pub fn pipeline_fut(&self) -> Option<&PipelineFutures> {
+        self.pipeline_futures.as_ref()
+    }
+
+    pub fn set_pipeline_fut(&mut self, pipeline_futures: PipelineFutures) {
+        self.pipeline_futures = Some(pipeline_futures);
+    }
+
+    pub fn set_pipeline_tx(&mut self, pipeline_tx: PipelineTx) {
+        self.pipeline_tx = Some(Arc::new(Mutex::new(pipeline_tx)));
+    }
+
+    pub fn set_pipeline_abort_handles(&mut self, abort_handles: Vec<AbortHandle>) {
+        self.pipeline_abort_handle = Some(abort_handles);
+    }
+
+    pub fn pipeline_tx(&self) -> Option<&Arc<Mutex<PipelineTx>>> {
+        self.pipeline_tx.as_ref()
+    }
+
+    pub fn abort_pipeline(&self) {
+        if let Some(abort_handles) = &self.pipeline_abort_handle {
+            for handle in abort_handles {
+                handle.abort();
+            }
+        }
+    }
+
+    pub async fn wait_until_complete(&self) {
+        // for all stages that involve executor
+        if let Some(futs) = &self.pipeline_futures {
+            let _ = futs.execute_fut.clone().await;
+            let _ = futs.commit_ledger_fut.clone().await;
+            let _ = futs.pre_commit_fut.clone().await;
+            let _ = futs.commit_ledger_fut.clone().await;
+        }
     }
 }
 
