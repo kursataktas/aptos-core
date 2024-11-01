@@ -1994,8 +1994,8 @@ impl AptosVM {
 
             TransactionPayload::V2(
                 TransactionPayloadV2::V1 {
-                    data,
-                    extra
+                    executable,
+                    extra_config,
                 }
             ) => {
                 unimplemented!("Nested transaction payload V1 is not yet supported")
@@ -2607,7 +2607,7 @@ impl AptosVM {
             },
 
             TransactionPayload::V2(
-                TransactionPayloadV2::V1 { data, extra } // Deprecated.
+                TransactionPayloadV2::V1 { executable, extra_config } // Deprecated.
             ) => {
                 // Nested transaction payload V1 is not yet supported.
                 unimplemented!("Nested transaction payload V1 is not yet supported")

@@ -487,9 +487,6 @@ pub struct UserTransactionRequestInner {
     pub gas_unit_price: U64,
     pub expiration_timestamp_secs: U64,
     pub payload: TransactionPayload,
-    // Question: Is it a good idea to add nonce here, and let `try_into_signed_transaction_poem` convert 
-    // the nonce into TransactionPayload::raw_
-    pub nonce: Option<U64>,
 }
 
 impl VerifyInput for UserTransactionRequestInner {
@@ -956,7 +953,7 @@ pub enum TransactionPayload {
 
     // Question (as above): Should we add a TransactionPayloadV2 variant here like in RawTransaction?
     // Or should we add UserTransactionV2? I personally feel the former is a hacky solution. I prefer the latter. What do you think?
-    TransactionPayloadV2(TransactionPayloadV2)
+    V2(TransactionPayloadV2)
 }
 
 impl VerifyInput for TransactionPayload {
@@ -1060,17 +1057,17 @@ pub enum TransactionExtraConfig {
 
 pub enum TransactionPayloadV2 {
     V1 {
-        data: TransactionExecutable,
-        extra: TransactionExtraConfig,
+        executable: TransactionExecutable,
+        extra_config: TransactionExtraConfig,
     }
 }
 
 impl VerifyInput for TransactionPayloadV2 {
     fn verify(&self) -> anyhow::Result<()> {
         match self {
-            TransactionPayloadV2::V1 { data, extra } => {
-                data.verify()?;
-                extra.verify()
+            TransactionPayloadV2::V1 { executable, extra_config } => {
+                executable.verify()?;
+                extra_config.verify()
             },
         }
     }

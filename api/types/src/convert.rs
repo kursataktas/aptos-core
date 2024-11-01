@@ -682,121 +682,119 @@ impl<'a, S: StateView> MoveConverter<'a, S> {
         payload: TransactionPayload,
     ) -> Result<aptos_types::transaction::TransactionPayload> {
         use aptos_types::transaction::TransactionPayload as Target;
+        use aptos_types::transaction::TransactionPayloadV2 as TargetV2;
+        use aptos_types::transaction::TransactionExecutable as Executable;
+        use aptos_types::transaction::TransactionExtraConfig as ExtraConfig;
+
+        let try_into_entry_function = |entry_func_payload: EntryFunctionPayload| -> Result<EntryFunction> {
+            let EntryFunctionPayload {
+                function,
+                type_arguments,
+                arguments,
+            } = entry_func_payload;
+
+            let module = function.module.clone();
+            let code =
+                self.inner.view_existing_module(&module.clone().into())? as Arc<dyn Bytecode>;
+            let func = code
+                .find_entry_function(function.name.0.as_ident_str())
+                .ok_or_else(|| format_err!("could not find entry function by {}", function))?;
+            ensure!(
+                func.generic_type_params.len() == type_arguments.len(),
+                "expect {} type arguments for entry function {}, but got {}",
+                func.generic_type_params.len(),
+                function,
+                type_arguments.len()
+            );
+            let args = self
+                .try_into_vm_values(func, arguments)?
+                .iter()
+                .map(bcs::to_bytes)
+                .collect::<Result<_, bcs::Error>>()?;
+
+            Ok(EntryFunction::new(
+                module.into(),
+                function.name.into(),
+                type_arguments
+                    .into_iter()
+                    .map(|v| v.try_into())
+                    .collect::<Result<_>>()?,
+                args,
+            ))
+        };
+
+        let try_into_script_payload = |script: ScriptPayload | -> Result<Script> {
+            let ScriptPayload {
+                code,
+                type_arguments,
+                arguments,
+            } = script;
+
+            let MoveScriptBytecode { bytecode, abi } = code.try_parse_abi();
+            match abi {
+                Some(func) => {
+                    let args = self.try_into_vm_values(func, arguments)?;
+                    Ok(Script::new(
+                        bytecode.into(),
+                        type_arguments
+                            .into_iter()
+                            .map(|v| v.try_into())
+                            .collect::<Result<_>>()?,
+                        args.into_iter()
+                            .map(|arg| arg.try_into())
+                            .collect::<Result<_>>()?,
+                    ))
+                },
+                None => return Err(anyhow::anyhow!("invalid transaction script bytecode")),
+            }
+        };
 
         let ret = match payload {
             TransactionPayload::EntryFunctionPayload(entry_func_payload) => {
-                let EntryFunctionPayload {
-                    function,
-                    type_arguments,
-                    arguments,
-                } = entry_func_payload;
-
-                let module = function.module.clone();
-                let code =
-                    self.inner.view_existing_module(&module.clone().into())? as Arc<dyn Bytecode>;
-                let func = code
-                    .find_entry_function(function.name.0.as_ident_str())
-                    .ok_or_else(|| format_err!("could not find entry function by {}", function))?;
-                ensure!(
-                    func.generic_type_params.len() == type_arguments.len(),
-                    "expect {} type arguments for entry function {}, but got {}",
-                    func.generic_type_params.len(),
-                    function,
-                    type_arguments.len()
-                );
-                let args = self
-                    .try_into_vm_values(func, arguments)?
-                    .iter()
-                    .map(bcs::to_bytes)
-                    .collect::<Result<_, bcs::Error>>()?;
-
-                Target::EntryFunction(EntryFunction::new(
-                    module.into(),
-                    function.name.into(),
-                    type_arguments
-                        .into_iter()
-                        .map(|v| v.try_into())
-                        .collect::<Result<_>>()?,
-                    args,
-                ))
+                Target::EntryFunction(try_into_entry_function(entry_func_payload)?)
             },
             TransactionPayload::ScriptPayload(script) => {
-                let ScriptPayload {
-                    code,
-                    type_arguments,
-                    arguments,
-                } = script;
-
-                let MoveScriptBytecode { bytecode, abi } = code.try_parse_abi();
-                match abi {
-                    Some(func) => {
-                        let args = self.try_into_vm_values(func, arguments)?;
-                        Target::Script(Script::new(
-                            bytecode.into(),
-                            type_arguments
-                                .into_iter()
-                                .map(|v| v.try_into())
-                                .collect::<Result<_>>()?,
-                            args.into_iter()
-                                .map(|arg| arg.try_into())
-                                .collect::<Result<_>>()?,
-                        ))
-                    },
-                    None => return Err(anyhow::anyhow!("invalid transaction script bytecode")),
-                }
+                Target::Script(try_into_script_payload(script)?)
             },
             TransactionPayload::MultisigPayload(multisig) => {
-                let transaction_payload = if let Some(payload) = multisig.transaction_payload {
+                let transaction_payload = multisig.transaction_payload.map(|payload| {
                     match payload {
                         MultisigTransactionPayload::EntryFunctionPayload(entry_function) => {
-                            let EntryFunctionPayload {
-                                function,
-                                type_arguments,
-                                arguments,
-                            } = entry_function;
-
-                            let module = function.module.clone();
-                            let code = self.inner.view_existing_module(&module.clone().into())?
-                                as Arc<dyn Bytecode>;
-                            let func = code
-                                .find_entry_function(function.name.0.as_ident_str())
-                                .ok_or_else(|| {
-                                    format_err!("could not find entry function by {}", function)
-                                })?;
-                            ensure!(
-                                func.generic_type_params.len() == type_arguments.len(),
-                                "expect {} type arguments for entry function {}, but got {}",
-                                func.generic_type_params.len(),
-                                function,
-                                type_arguments.len()
-                            );
-
-                            let args = self
-                                .try_into_vm_values(func, arguments)?
-                                .iter()
-                                .map(bcs::to_bytes)
-                                .collect::<Result<_, bcs::Error>>()?;
-                            Some(
-                                aptos_types::transaction::MultisigTransactionPayload::EntryFunction(
-                                    EntryFunction::new(
-                                        module.into(),
-                                        function.name.into(),
-                                        type_arguments
-                                            .into_iter()
-                                            .map(|v| v.try_into())
-                                            .collect::<Result<_>>()?,
-                                        args,
-                                    ),
-                                ),
-                            )
+                            aptos_types::transaction::MultisigTransactionPayload::EntryFunction(try_into_entry_function(entry_function)?)
                         },
                     }
-                } else {
-                    None
-                };
+                });
                 Target::Multisig(Multisig {
                     multisig_address: multisig.multisig_address.into(),
                     transaction_payload,
+                })
+            },
+            TransactionPayload::V2(
+                TransactionPayloadV2::V1 {
+                    executable,
+                    extra_config,
+                },
+            ) => {
+                let executable = match executable {
+                    TransactionExecutable::EntryFunction(entry_func_payload) => {
+                        Executable::EntryFunction(try_into_entry_function(entry_func_payload)?)
+                    },
+                    TransactionExecutable::Script(script_payload) => {
+                        Executable::Script(try_into_script_payload(script_payload)?)
+                    },
+                };
+                let extra_config = match extra_config {
+                    V1 {
+                        multisig_address,
+                        replay_protection_nonce,
+                    } => ExtraConfig::V1 {
+                        multisig_address: multisig_address.map(|multisig_address| multisig_address.into()),
+                        replay_protection_nonce: replay_protection_nonce.into(),
+                    },
+                };
+                Target::V2(TargetV2::V1 {
+                    executable,
+                    extra_config,
                 })
             },
 

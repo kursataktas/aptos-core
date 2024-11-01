@@ -215,7 +215,7 @@ impl RawTransaction {
     pub fn new_txn(
         sender: AccountAddress,
         replay_protector: ReplayProtector,
-        payload_data: TransactionExecutable,
+        executable: TransactionExecutable,
         multisig_address: Option<AccountAddress>,
         max_gas_amount: u64,
         gas_unit_price: u64,
@@ -229,8 +229,9 @@ impl RawTransaction {
                     sequence_number,
                     payload: TransactionPayload::V2(
                         TransactionPayloadV2::V1 {
-                            data: payload_data,
-                            extra: TransactionExtraConfig::V1 {
+                            executable,
+                            extra_config: TransactionExtraConfig::V1 {
+                                multisig_address,
                                 replay_protection_nonce: None,
                             },
                         },
@@ -248,8 +249,9 @@ impl RawTransaction {
                     sequence_number: u64::MAX,
                     payload: TransactionPayload::V2(
                         TransactionPayloadV2::V1 {
-                            data: payload_data,
-                            extra: TransactionExtraConfig::V1 {
+                            executable,
+                            extra_config: TransactionExtraConfig::V1 {
+                                multisig_address,
                                 replay_protection_nonce: Some(nonce),
                             },
                         },
@@ -489,8 +491,8 @@ pub enum TransactionPayload {
 #[derive(Clone, Debug, Hash, Eq, PartialEq, Serialize, Deserialize)]
 pub enum TransactionPayloadV2 {
     V1 {
-        data: TransactionExecutable,
-        extra: TransactionExtraConfig,
+        executable: TransactionExecutable,
+        extra_config: TransactionExtraConfig,
     }
 }
 

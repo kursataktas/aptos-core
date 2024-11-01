@@ -477,8 +477,8 @@ pub fn update_counters_for_processed_chunk<T>(
 
                 aptos_types::transaction::TransactionPayload::V2(
                     TransactionPayloadV2::V1 { 
-                        data,
-                        extra: TransactionExtraConfig:: V1 {
+                        executable,
+                        extra_config: TransactionExtraConfig:: V1 {
                             multisig_address,
                             replay_protection_nonce,
                         },

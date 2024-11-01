@@ -52,8 +52,8 @@ impl UseCaseAwareTransaction for SignedTransaction {
             },
             V2(
                 TransactionPayloadV2::V1 {
-                    data: TransactionExecutable::EntryFunction(entry_fun),
-                    extra: _,
+                    executable: TransactionExecutable::EntryFunction(entry_fun),
+                    extra_config: _,
                 }
             ) => {
                     let module_id = entry_fun.module();
