@@ -1490,6 +1490,7 @@ name = "aptos-executor-benchmark"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "aptos-aggregator",
  "aptos-block-executor",
  "aptos-block-partitioner",
  "aptos-config",
@@ -1528,6 +1529,7 @@ dependencies = [
  "itertools 0.13.0",
  "jemallocator",
  "move-core-types",
+ "move-vm-types",
  "num_cpus",
  "once_cell",
  "rand 0.7.3",

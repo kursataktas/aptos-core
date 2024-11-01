@@ -23,16 +23,16 @@ pub enum NativeTransaction {
         sequence_number: u64,
         recipient: AccountAddress,
         amount: u64,
-        fail_on_account_existing: bool,
-        fail_on_account_missing: bool,
+        fail_on_recipient_account_existing: bool,
+        fail_on_recipient_account_missing: bool,
     },
     BatchTransfer {
         sender: AccountAddress,
         sequence_number: u64,
         recipients: Vec<AccountAddress>,
         amounts: Vec<u64>,
-        fail_on_account_existing: bool,
-        fail_on_account_missing: bool,
+        fail_on_recipient_account_existing: bool,
+        fail_on_recipient_account_missing: bool,
     },
 }
 
@@ -60,16 +60,16 @@ impl NativeTransaction {
                                 sequence_number: user_txn.sequence_number(),
                                 recipient: bcs::from_bytes(&f.args()[0]).unwrap(),
                                 amount: bcs::from_bytes(&f.args()[1]).unwrap(),
-                                fail_on_account_existing: false,
-                                fail_on_account_missing: true,
+                                fail_on_recipient_account_existing: false,
+                                fail_on_recipient_account_missing: true,
                             },
                             (AccountAddress::ONE, "aptos_account", "transfer") => Self::Transfer {
                                 sender: user_txn.sender(),
                                 sequence_number: user_txn.sequence_number(),
                                 recipient: bcs::from_bytes(&f.args()[0]).unwrap(),
                                 amount: bcs::from_bytes(&f.args()[1]).unwrap(),
-                                fail_on_account_existing: false,
-                                fail_on_account_missing: false,
+                                fail_on_recipient_account_existing: false,
+                                fail_on_recipient_account_missing: false,
                             },
                             (AccountAddress::ONE, "aptos_account", "create_account") => {
                                 Self::Transfer {
@@ -77,8 +77,8 @@ impl NativeTransaction {
                                     sequence_number: user_txn.sequence_number(),
                                     recipient: bcs::from_bytes(&f.args()[0]).unwrap(),
                                     amount: 0,
-                                    fail_on_account_existing: true,
-                                    fail_on_account_missing: false,
+                                    fail_on_recipient_account_existing: true,
+                                    fail_on_recipient_account_missing: false,
                                 }
                             },
                             (AccountAddress::ONE, "aptos_account", "batch_transfer") => {
@@ -87,8 +87,8 @@ impl NativeTransaction {
                                     sequence_number: user_txn.sequence_number(),
                                     recipients: bcs::from_bytes(&f.args()[0]).unwrap(),
                                     amounts: bcs::from_bytes(&f.args()[1]).unwrap(),
-                                    fail_on_account_existing: false,
-                                    fail_on_account_missing: true,
+                                    fail_on_recipient_account_existing: false,
+                                    fail_on_recipient_account_missing: true,
                                 }
                             },
                             (_, "simple", "nop") => Self::Nop {

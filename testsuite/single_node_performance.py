@@ -103,8 +103,10 @@ else:
 
 if os.environ.get("DISABLE_FA_APT"):
     FEATURE_FLAGS = ""
+    FA_MIGRATION_COMPLETE = False
 else:
     FEATURE_FLAGS = "--enable-feature NEW_ACCOUNTS_DEFAULT_TO_FA_APT_STORE --enable-feature OPERATIONS_DEFAULT_TO_FA_APT_STORE"
+    FA_MIGRATION_COMPLETE = True
 
 if os.environ.get("ENABLE_PRUNER"):
     DB_PRUNER_FLAGS = "--enable-state-pruner --enable-ledger-pruner --enable-epoch-snapshot-pruner --ledger-pruning-batch-size 10000 --state-prune-window 3000000 --epoch-snapshot-prune-window 3000000 --ledger-prune-window 3000000"
@@ -303,87 +305,25 @@ TESTS = [
     RunGroupConfig(expected_tps=6800, key=RunGroupKey("token-v2-ambassador-mint"), included_in=Flow.MAINNET_LARGE_DB),
     # RunGroupConfig(expected_tps=17000 if NUM_ACCOUNTS < 5000000 else 28000, key=RunGroupKey("coin_transfer_connected_components", executor_type="sharded"), key_extra=RunGroupKeyExtra(sharding_traffic_flags="--connected-tx-grps 5000", transaction_type_override=""), included_in=Flow.MAINNET | Flow.MAINNET_LARGE_DB, waived=True),
     # RunGroupConfig(expected_tps=27000 if NUM_ACCOUNTS < 5000000 else 23000, key=RunGroupKey("coin_transfer_hotspot", executor_type="sharded"), key_extra=RunGroupKeyExtra(sharding_traffic_flags="--hotspot-probability 0.8", transaction_type_override=""), included_in=Flow.MAINNET | Flow.MAINNET_LARGE_DB, waived=True),
-
-    RunGroupConfig(expected_tps=10000, key=RunGroupKey("apt_fa_transfer_sequential_by_stages"), key_extra=RunGroupKeyExtra(
-        transaction_type_override="apt-fa-transfer",
-        sig_verify_num_threads_override=1,
-        execution_num_threads_override=1,
-        split_stages_override=True,
-        single_block_dst_working_set=True,
-    ), included_in=Flow.EXECUTORS),
-    RunGroupConfig(expected_tps=10000, key=RunGroupKey("apt_fa_transfer_sequential_by_stages", executor_type="NativeVM"), key_extra=RunGroupKeyExtra(
-        transaction_type_override="apt-fa-transfer",
-        sig_verify_num_threads_override=1,
-        execution_num_threads_override=1,
-        split_stages_override=True,
-        single_block_dst_working_set=True,
-    ), included_in=Flow.EXECUTORS),
-    RunGroupConfig(expected_tps=10000, key=RunGroupKey("apt_fa_transfer_sequential_by_stages", executor_type="AptosVMSpeculative"), key_extra=RunGroupKeyExtra(
-        transaction_type_override="apt-fa-transfer",
-        sig_verify_num_threads_override=1,
-        execution_num_threads_override=1,
-        split_stages_override=True,
-        single_block_dst_working_set=True,
-    ), included_in=Flow.EXECUTORS),
-    RunGroupConfig(expected_tps=10000, key=RunGroupKey("apt_fa_transfer_sequential_by_stages", executor_type="NativeSpeculative"), key_extra=RunGroupKeyExtra(
-        transaction_type_override="apt-fa-transfer",
-        sig_verify_num_threads_override=1,
-        execution_num_threads_override=1,
-        split_stages_override=True,
-        single_block_dst_working_set=True,
-    ), included_in=Flow.EXECUTORS),
-    RunGroupConfig(expected_tps=10000, key=RunGroupKey("apt_fa_transfer_sequential_by_stages", executor_type="NativeNoStorageSpeculative"), key_extra=RunGroupKeyExtra(
-        transaction_type_override="apt-fa-transfer",
-        sig_verify_num_threads_override=1,
-        execution_num_threads_override=1,
-        split_stages_override=True,
-        single_block_dst_working_set=True,
-    ), included_in=Flow.EXECUTORS),
-    RunGroupConfig(expected_tps=10000, key=RunGroupKey("apt_fa_transfer_sequential_by_stages", executor_type="NativeValueCacheSpeculative"), key_extra=RunGroupKeyExtra(
-        transaction_type_override="apt-fa-transfer",
-        sig_verify_num_threads_override=1,
-        execution_num_threads_override=1,
-        split_stages_override=True,
-        single_block_dst_working_set=True,
-    ), included_in=Flow.EXECUTORS),
-
-    RunGroupConfig(expected_tps=30000, key=RunGroupKey("apt_fa_transfer_by_stages"), key_extra=RunGroupKeyExtra(
-        transaction_type_override="apt-fa-transfer",
-        split_stages_override=True,
-        single_block_dst_working_set=True,
-        sig_verify_num_threads_override=NUMBER_OF_EXECUTION_THREADS,
-    ), included_in=Flow.EXECUTORS),
-    RunGroupConfig(expected_tps=30000, key=RunGroupKey("apt_fa_transfer_by_stages", executor_type="NativeVM"), key_extra=RunGroupKeyExtra(
-        transaction_type_override="apt-fa-transfer",
-        split_stages_override=True,
-        single_block_dst_working_set=True,
-        sig_verify_num_threads_override=NUMBER_OF_EXECUTION_THREADS,
-    ), included_in=Flow.EXECUTORS),
-    RunGroupConfig(expected_tps=30000, key=RunGroupKey("apt_fa_transfer_by_stages", executor_type="AptosVMSpeculative"), key_extra=RunGroupKeyExtra(
-        transaction_type_override="apt-fa-transfer",
-        split_stages_override=True,
-        single_block_dst_working_set=True,
-        sig_verify_num_threads_override=NUMBER_OF_EXECUTION_THREADS,
-    ), included_in=Flow.EXECUTORS),
-    RunGroupConfig(expected_tps=30000, key=RunGroupKey("apt_fa_transfer_by_stages", executor_type="NativeSpeculative"), key_extra=RunGroupKeyExtra(
-        transaction_type_override="apt-fa-transfer",
-        split_stages_override=True,
-        single_block_dst_working_set=True,
-        sig_verify_num_threads_override=NUMBER_OF_EXECUTION_THREADS,
-    ), included_in=Flow.EXECUTORS),
-    RunGroupConfig(expected_tps=30000, key=RunGroupKey("apt_fa_transfer_by_stages", executor_type="NativeNoStorageSpeculative"), key_extra=RunGroupKeyExtra(
-        transaction_type_override="apt-fa-transfer",
-        split_stages_override=True,
-        single_block_dst_working_set=True,
-        sig_verify_num_threads_override=NUMBER_OF_EXECUTION_THREADS,
-    ), included_in=Flow.EXECUTORS),
-    RunGroupConfig(expected_tps=30000, key=RunGroupKey("apt_fa_transfer_by_stages", executor_type="NativeValueCacheSpeculative"), key_extra=RunGroupKeyExtra(
-        transaction_type_override="apt-fa-transfer",
-        split_stages_override=True,
-        single_block_dst_working_set=True,
-        sig_verify_num_threads_override=NUMBER_OF_EXECUTION_THREADS,
-    ), included_in=Flow.EXECUTORS),
+] + [
+    RunGroupConfig(
+        expected_tps=10000 if sequential else 30000, 
+        key=RunGroupKey("{}_{}_by_stages".format(transaction_type, "sequential" if sequential else "parallel")), 
+        key_extra=RunGroupKeyExtra(
+            transaction_type_override=transaction_type,
+            sig_verify_num_threads_override=1 if sequential else NUMBER_OF_EXECUTION_THREADS,
+            execution_num_threads_override=1 if sequential else None,
+            split_stages_override=True,
+            single_block_dst_working_set=True,
+        ), 
+        included_in=Flow.EXECUTORS
+    )
+    for (transaction_type, requires_fa) in [("no-op", False), ("coin-transfer", False), ("no-op", True), ("apt-fa-transfer", True)]
+    if FA_MIGRATION_COMPLETE == requires_fa
+    for sequential in [True, False]
+    for executor_type in ["VM", "NativeVM", "AptosVMSpeculative", "NativeSpeculative", "NativeValueCacheSpeculative", "NativeNoStorageSpeculative"]
 ]
+
 # fmt: on
 
 # Run the single node with performance optimizations enabled

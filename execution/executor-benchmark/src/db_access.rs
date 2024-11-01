@@ -5,12 +5,13 @@ use anyhow::Result;
 use aptos_types::{
     account_address::AccountAddress,
     account_config::{
-        AccountResource, CoinStoreResource, FungibleStoreResource, ObjectGroupResource,
+        AccountResource, CoinInfoResource, CoinStoreResource, ConcurrentSupplyResource,
+        FungibleStoreResource, ObjectCoreResource, ObjectGroupResource,
     },
     event::{EventHandle, EventKey},
     state_store::{state_key::StateKey, StateView},
     write_set::TOTAL_SUPPLY_STATE_KEY,
-    AptosCoinType,
+    AptosCoinType, CoinType,
 };
 use move_core_types::{
     identifier::Identifier,
@@ -24,7 +25,13 @@ pub struct CommonStructTags {
     pub account: StructTag,
     pub apt_coin_store: StructTag,
     pub object_group: StructTag,
+    pub object_core: StructTag,
     pub fungible_store: StructTag,
+    pub concurrent_supply: StructTag,
+
+    pub apt_coin_type_name: String,
+
+    pub apt_coin_info_resource: StateKey,
 }
 
 impl CommonStructTags {
@@ -33,7 +40,15 @@ impl CommonStructTags {
             account: AccountResource::struct_tag(),
             apt_coin_store: CoinStoreResource::<AptosCoinType>::struct_tag(),
             object_group: ObjectGroupResource::struct_tag(),
+            object_core: ObjectCoreResource::struct_tag(),
             fungible_store: FungibleStoreResource::struct_tag(),
+            concurrent_supply: ConcurrentSupplyResource::struct_tag(),
+
+            apt_coin_type_name: "0x1::aptos_coin::AptosCoin".to_string(),
+            apt_coin_info_resource: StateKey::resource_typed::<CoinInfoResource<AptosCoinType>>(
+                &AptosCoinType::coin_info_address(),
+            )
+            .unwrap(),
         }
     }
 }
@@ -148,5 +163,9 @@ impl DbAccessUtil {
             EventHandle::new(EventKey::new(1, address), 0),
             EventHandle::new(EventKey::new(2, address), 0),
         )
+    }
+
+    pub fn new_object_core(address: AccountAddress, owner: AccountAddress) -> ObjectCoreResource {
+        ObjectCoreResource::new(owner, false, EventHandle::new(EventKey::new(1, address), 0))
     }
 }

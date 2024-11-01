@@ -14,6 +14,7 @@ rust-version = { workspace = true }
 
 [dependencies]
 anyhow = { workspace = true }
+aptos-aggregator = { workspace = true }
 aptos-block-executor = { workspace = true }
 aptos-block-partitioner = { workspace = true }
 aptos-config = { workspace = true }
@@ -49,6 +50,7 @@ derivative = { workspace = true }
 indicatif = { workspace = true }
 itertools = { workspace = true }
 move-core-types = { workspace = true }
+move-vm-types = { workspace = true }
 num_cpus = { workspace = true }
 once_cell = { workspace = true }
 rand = { workspace = true }
