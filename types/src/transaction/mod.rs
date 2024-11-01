@@ -13,7 +13,6 @@ use crate::{
     ledger_info::LedgerInfo,
     on_chain_config::{FeatureFlag, Features},
     proof::{TransactionInfoListWithProof, TransactionInfoWithProof},
-    state_store::ShardedStateUpdates,
     transaction::authenticator::{
         AccountAuthenticator, AnyPublicKey, AnySignature, SingleKeyAuthenticator,
         TransactionAuthenticator,
@@ -54,12 +53,15 @@ pub mod user_transaction_context;
 pub mod webauthn;
 
 pub use self::block_epilogue::{BlockEndInfo, BlockEpiloguePayload};
-#[cfg(any(test, feature = "fuzzing"))]
-use crate::state_store::create_empty_sharded_state_updates;
 use crate::{
-    block_metadata_ext::BlockMetadataExt, contract_event::TransactionEvent, executable::ModulePath,
-    fee_statement::FeeStatement, keyless::FederatedKeylessPublicKey,
-    proof::accumulator::InMemoryEventAccumulator, validator_txn::ValidatorTransaction,
+    block_metadata_ext::BlockMetadataExt,
+    contract_event::TransactionEvent,
+    executable::ModulePath,
+    fee_statement::FeeStatement,
+    keyless::FederatedKeylessPublicKey,
+    proof::accumulator::InMemoryEventAccumulator,
+    state_store::{state_key::StateKey, state_value::StateValue},
+    validator_txn::ValidatorTransaction,
     write_set::TransactionWrite,
 };
 pub use block_output::BlockOutput;
@@ -1515,7 +1517,6 @@ impl Display for TransactionInfo {
 pub struct TransactionToCommit {
     pub transaction: Transaction,
     pub transaction_info: TransactionInfo,
-    pub state_updates: ShardedStateUpdates,
     pub write_set: WriteSet,
     pub events: Vec<ContractEvent>,
     pub is_reconfig: bool,
@@ -1526,7 +1527,6 @@ impl TransactionToCommit {
     pub fn new(
         transaction: Transaction,
         transaction_info: TransactionInfo,
-        state_updates: ShardedStateUpdates,
         write_set: WriteSet,
         events: Vec<ContractEvent>,
         is_reconfig: bool,
@@ -1535,7 +1535,6 @@ impl TransactionToCommit {
         TransactionToCommit {
             transaction,
             transaction_info,
-            state_updates,
             write_set,
             events,
             is_reconfig,
@@ -1548,7 +1547,6 @@ impl TransactionToCommit {
         Self {
             transaction: Transaction::StateCheckpoint(HashValue::zero()),
             transaction_info: TransactionInfo::dummy(),
-            state_updates: create_empty_sharded_state_updates(),
             write_set: Default::default(),
             events: vec![],
             is_reconfig: false,
@@ -1608,12 +1606,14 @@ impl TransactionToCommit {
         self.transaction_info = txn_info
     }
 
-    pub fn state_updates(&self) -> &ShardedStateUpdates {
-        &self.state_updates
-    }
-
     pub fn write_set(&self) -> &WriteSet {
         &self.write_set
+    }
+
+    pub fn state_updates(&self) -> impl IntoIterator<Item = (StateKey, Option<StateValue>)> + '_ {
+        self.write_set
+            .iter()
+            .map(|(key, op)| (key.clone(), op.as_state_value()))
     }
 
     pub fn events(&self) -> &[ContractEvent] {

@@ -157,7 +157,6 @@ impl StateComputeResult {
             transactions: self.execution_output.to_commit.txns(),
             transaction_outputs: self.execution_output.to_commit.transaction_outputs(),
             transaction_infos: &self.ledger_update_output.transaction_infos,
-            per_version_state_updates: &self.state_checkpoint_output.per_version_state_updates,
             base_state_version: self.state_checkpoint_output.parent_state.base_version,
             latest_in_memory_state: &self.state_checkpoint_output.result_state,
             state_updates_until_last_checkpoint: self

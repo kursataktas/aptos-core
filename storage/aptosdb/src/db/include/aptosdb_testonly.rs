@@ -1,10 +1,10 @@
 // Copyright © Aptos Foundation
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::HashMap;
 use crate::state_store::buffered_state::BufferedState;
 use aptos_config::config::{ BUFFERED_STATE_TARGET_ITEMS_FOR_TEST, DEFAULT_MAX_NUM_NODES_PER_LRU_CACHE_SHARD};
 use aptos_infallible::Mutex;
-use aptos_types::state_store::{create_empty_sharded_state_updates, ShardedStateUpdates};
 use std::default::Default;
 use aptos_storage_interface::cached_state_view::ShardedStateCache;
 use aptos_storage_interface::state_delta::StateDelta;
@@ -133,8 +133,7 @@ pub struct ChunkToCommitOwned {
     transaction_infos: Vec<TransactionInfo>,
     base_state_version: Option<Version>,
     latest_in_memory_state: Arc<StateDelta>,
-    per_version_state_updates: Vec<ShardedStateUpdates>,
-    state_updates_until_last_checkpoint: Option<ShardedStateUpdates>,
+    state_updates_until_last_checkpoint: Option<HashMap<StateKey, Option<StateValue>>>,
     sharded_state_cache: Option<ShardedStateCache>,
     is_reconfig: bool,
 }
@@ -146,13 +145,13 @@ impl ChunkToCommitOwned {
         base_state_version: Option<Version>,
         latest_in_memory_state: &StateDelta,
     ) -> Self {
-        let (transactions, transaction_outputs, transaction_infos, per_version_state_updates) = Self::disassemble_txns_to_commit(txns_to_commit);
+        let (transactions, transaction_outputs, transaction_infos) = Self::disassemble_txns_to_commit(txns_to_commit);
 
         let state_updates_until_last_checkpoint = Self::gather_state_updates_until_last_checkpoint(
             first_version,
             latest_in_memory_state,
-            &per_version_state_updates,
             &transaction_infos,
+            &transaction_outputs,
         );
 
         Self {
@@ -162,7 +161,6 @@ impl ChunkToCommitOwned {
             transaction_infos,
             base_state_version,
             latest_in_memory_state: Arc::new(latest_in_memory_state.clone()),
-            per_version_state_updates,
             state_updates_until_last_checkpoint,
             sharded_state_cache: None,
             is_reconfig: false,
@@ -177,7 +175,6 @@ impl ChunkToCommitOwned {
             transaction_infos: &self.transaction_infos,
             base_state_version: self.base_state_version,
             latest_in_memory_state: &self.latest_in_memory_state,
-            per_version_state_updates: &self.per_version_state_updates,
             state_updates_until_last_checkpoint: self.state_updates_until_last_checkpoint.as_ref(),
             sharded_state_cache: self.sharded_state_cache.as_ref(),
             is_reconfig: self.is_reconfig,
@@ -185,11 +182,11 @@ impl ChunkToCommitOwned {
     }
 
     fn disassemble_txns_to_commit(txns_to_commit: &[TransactionToCommit]) -> (
-        Vec<Transaction>, Vec<TransactionOutput>, Vec<TransactionInfo>, Vec<ShardedStateUpdates>,
+        Vec<Transaction>, Vec<TransactionOutput>, Vec<TransactionInfo>
     ) {
         txns_to_commit.iter().map(|txn_to_commit| {
             let TransactionToCommit {
-                transaction, transaction_info, state_updates, write_set, events, is_reconfig: _, transaction_auxiliary_data
+                transaction, transaction_info, write_set, events, is_reconfig: _, transaction_auxiliary_data
             } = txn_to_commit;
 
             let transaction_output = TransactionOutput::new(
@@ -200,16 +197,16 @@ impl ChunkToCommitOwned {
                 transaction_auxiliary_data.clone(),
             );
 
-            (transaction.clone(), transaction_output, transaction_info.clone(), state_updates.clone())
+            (transaction.clone(), transaction_output, transaction_info.clone())
         }).multiunzip()
     }
 
     pub fn gather_state_updates_until_last_checkpoint(
         first_version: Version,
         latest_in_memory_state: &StateDelta,
-        per_version_state_updates: &[ShardedStateUpdates],
         transaction_infos: &[TransactionInfo],
-    ) -> Option<ShardedStateUpdates> {
+        transaction_outputs: &[TransactionOutput],
+    ) -> Option<HashMap<StateKey, Option<StateValue>>> {
         if let Some(latest_checkpoint_version) = latest_in_memory_state.base_version {
             if latest_checkpoint_version >= first_version {
                 let idx = (latest_checkpoint_version - first_version) as usize;
@@ -219,15 +216,7 @@ impl ChunkToCommitOwned {
                     latest_checkpoint_version,
                     first_version + idx as u64
                 );
-                let mut sharded_state_updates = create_empty_sharded_state_updates();
-                sharded_state_updates.par_iter_mut().enumerate().for_each(
-                    |(shard_id, state_updates_shard)| {
-                        per_version_state_updates[..=idx].iter().for_each(|updates| {
-                            state_updates_shard.extend(updates[shard_id].clone());
-                        })
-                    },
-                );
-                return Some(sharded_state_updates);
+                return Some(transaction_outputs[..=idx].iter().map(TransactionOutput::write_set).flat_map(WriteSet::state_updates).collect())
             }
         }
 

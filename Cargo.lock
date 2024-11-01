@@ -1471,7 +1471,6 @@ dependencies = [
  "aptos-types",
  "aptos-vm",
  "aptos-vm-genesis",
- "arr_macro",
  "bcs 0.1.4",
  "bytes",
  "dashmap",

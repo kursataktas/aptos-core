@@ -7,9 +7,12 @@ use crate::transactions_with_output::TransactionsWithOutput;
 use aptos_crypto::HashValue;
 use aptos_drop_helper::DropHelper;
 use aptos_storage_interface::state_delta::StateDelta;
-use aptos_types::{state_store::ShardedStateUpdates, transaction::TransactionStatus};
+use aptos_types::{
+    state_store::{state_key::StateKey, state_value::StateValue},
+    transaction::TransactionStatus,
+};
 use derive_more::Deref;
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 
 #[derive(Default)]
 pub struct TransactionsByStatus {
@@ -69,15 +72,13 @@ impl StateCheckpointOutput {
     pub fn new(
         parent_state: Arc<StateDelta>,
         result_state: Arc<StateDelta>,
-        state_updates_before_last_checkpoint: Option<ShardedStateUpdates>,
-        per_version_state_updates: Vec<ShardedStateUpdates>,
+        state_updates_before_last_checkpoint: Option<HashMap<StateKey, Option<StateValue>>>,
         state_checkpoint_hashes: Vec<Option<HashValue>>,
     ) -> Self {
         Self::new_impl(Inner {
             parent_state,
             result_state,
             state_updates_before_last_checkpoint,
-            per_version_state_updates,
             state_checkpoint_hashes,
         })
     }
@@ -87,7 +88,6 @@ impl StateCheckpointOutput {
             parent_state: state.clone(),
             result_state: state,
             state_updates_before_last_checkpoint: None,
-            per_version_state_updates: vec![],
             state_checkpoint_hashes: vec![],
         })
     }
@@ -111,8 +111,7 @@ impl StateCheckpointOutput {
 pub struct Inner {
     pub parent_state: Arc<StateDelta>,
     pub result_state: Arc<StateDelta>,
-    pub state_updates_before_last_checkpoint: Option<ShardedStateUpdates>,
-    pub per_version_state_updates: Vec<ShardedStateUpdates>,
+    pub state_updates_before_last_checkpoint: Option<HashMap<StateKey, Option<StateValue>>>,
     pub state_checkpoint_hashes: Vec<Option<HashValue>>,
 }
 

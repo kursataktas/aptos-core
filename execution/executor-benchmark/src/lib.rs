@@ -508,6 +508,7 @@ impl GasMeasurement {
     }
 }
 
+/// FIXME(aldenhu): update
 static OTHER_LABELS: &[(&str, bool, &str)] = &[
     ("1.", true, "verified_state_view"),
     ("2.", true, "state_checkpoint"),

@@ -48,6 +48,7 @@ use aptos_experimental_runtimes::thread_manager::THREAD_MANAGER;
 use aptos_infallible::Mutex;
 use aptos_jellyfish_merkle::iterator::JellyfishMerkleIterator;
 use aptos_logger::info;
+use aptos_metrics_core::TimerHelper;
 use aptos_schemadb::SchemaBatch;
 use aptos_scratchpad::{SmtAncestors, SparseMerkleTree};
 use aptos_storage_interface::{
@@ -60,19 +61,20 @@ use aptos_storage_interface::{
 use aptos_types::{
     proof::{definition::LeafCount, SparseMerkleProofExt, SparseMerkleRangeProof},
     state_store::{
-        create_empty_sharded_state_updates,
         state_key::{prefix::StateKeyPrefix, StateKey},
         state_storage_usage::StateStorageUsage,
         state_value::{
             StaleStateValueByKeyHashIndex, StaleStateValueIndex, StateValue,
             StateValueChunkWithProof,
         },
-        ShardedStateUpdates, StateViewId,
+        StateViewId,
     },
     transaction::Version,
     write_set::{TransactionWrite, WriteSet},
 };
+use arr_macro::arr;
 use claims::{assert_ge, assert_le};
+use itertools::Itertools;
 use rayon::prelude::*;
 use std::{collections::HashSet, ops::Deref, sync::Arc};
 
@@ -91,6 +93,12 @@ const MAX_WRITE_SETS_AFTER_SNAPSHOT: LeafCount = buffered_state::TARGET_SNAPSHOT
     * 2;
 
 pub const MAX_COMMIT_PROGRESS_DIFFERENCE: u64 = 1_000_000;
+
+type ShardedKvUpdates = [Vec<((StateKey, Version), Option<StateValue>)>; NUM_STATE_SHARDS];
+
+fn empty_kv_updates() -> ShardedKvUpdates {
+    arr![vec![]; 16]
+}
 
 pub(crate) struct StateDb {
     pub ledger_db: Arc<LedgerDb>,
@@ -648,47 +656,22 @@ impl StateStore {
         sharded_state_kv_batches: &ShardedStateKvSchemaBatch,
         enable_sharding: bool,
     ) -> Result<()> {
-        let _timer = OTHER_TIMERS_SECONDS
-            .with_label_values(&["put_writesets"])
-            .start_timer();
-
-        let value_state_sets: Vec<ShardedStateUpdates> = write_sets
-            .iter()
-            .map(|ws| {
-                let mut sharded_state_updates = create_empty_sharded_state_updates();
-                ws.iter().for_each(|(key, value)| {
-                    sharded_state_updates[key.get_shard_id() as usize]
-                        .insert(key.clone(), value.as_state_value());
-                });
-                sharded_state_updates
-            })
-            .collect::<Vec<_>>();
-
-        self.put_stats_and_indices(
-            &value_state_sets,
+        self.put_value_sets(
+            &write_sets,
             first_version,
             StateStorageUsage::new_untracked(),
-            None,
+            None, // state cache
             batch,
             sharded_state_kv_batches,
-            None,
             enable_sharding,
-        )?;
-
-        self.put_state_values(
-            &value_state_sets,
-            first_version,
-            sharded_state_kv_batches,
-            enable_sharding,
-        )?;
-
-        Ok(())
+            None, // last_checkpoint_index
+        )
     }
 
     /// Put the `value_state_sets` into its own CF.
-    pub fn put_value_sets(
+    pub fn put_value_sets<'a>(
         &self,
-        value_state_sets: &[ShardedStateUpdates],
+        write_sets: impl IntoIterator<Item = &'a WriteSet>,
         first_version: Version,
         expected_usage: StateStorageUsage,
         sharded_state_cache: Option<&ShardedStateCache>,
@@ -697,13 +680,15 @@ impl StateStore {
         enable_sharding: bool,
         last_checkpoint_index: Option<usize>,
     ) -> Result<()> {
-        let _timer = OTHER_TIMERS_SECONDS
-            .with_label_values(&["put_value_sets"])
-            .start_timer();
+        let _timer = OTHER_TIMERS_SECONDS.timer_with(&["put_value_sets"]);
+
+        let (kv_updates_per_shard, num_versions) =
+            Self::get_sharded_kv_updates(first_version, write_sets);
 
         self.put_stats_and_indices(
-            value_state_sets,
+            &kv_updates_per_shard,
             first_version,
+            num_versions,
             expected_usage,
             sharded_state_cache,
             ledger_batch,
@@ -712,49 +697,56 @@ impl StateStore {
             enable_sharding,
         )?;
 
-        let _timer = OTHER_TIMERS_SECONDS
-            .with_label_values(&["add_state_kv_batch"])
-            .start_timer();
-
         self.put_state_values(
-            value_state_sets,
-            first_version,
+            &kv_updates_per_shard,
             sharded_state_kv_batches,
             enable_sharding,
         )
     }
 
+    fn get_sharded_kv_updates<'a>(
+        first_version: Version,
+        write_sets: impl IntoIterator<Item = &'a WriteSet>,
+    ) -> (ShardedKvUpdates, usize) {
+        let _timer = OTHER_TIMERS_SECONDS.timer_with(&["get_sharded_kv_updates"]);
+
+        let mut updates_by_shard = empty_kv_updates();
+        let num_versions = write_sets
+            .into_iter()
+            .enumerate()
+            .map(|(idx, write_set)| {
+                let version = first_version + idx as Version;
+                write_set.iter().for_each(|(state_key, write_op)| {
+                    updates_by_shard[state_key.get_shard_id() as usize]
+                        .push(((state_key.clone(), version), write_op.as_state_value()));
+                });
+            })
+            .count();
+
+        (updates_by_shard, num_versions)
+    }
+
     pub fn put_state_values(
         &self,
-        value_state_sets: &[ShardedStateUpdates],
-        first_version: Version,
+        kv_updates_per_shard: &ShardedKvUpdates,
         sharded_state_kv_batches: &ShardedStateKvSchemaBatch,
         enable_sharding: bool,
     ) -> Result<()> {
+        let _timer = OTHER_TIMERS_SECONDS.timer_with(&["add_state_kv_batch"]);
+
         sharded_state_kv_batches
             .par_iter()
-            .enumerate()
-            .try_for_each(|(shard_id, batch)| {
-                value_state_sets
-                    .par_iter()
-                    .enumerate()
-                    .flat_map_iter(|(i, shards)| {
-                        let version = first_version + i as Version;
-                        let kvs = &shards[shard_id];
-                        kvs.iter().map(move |(k, v)| {
-                            if enable_sharding {
-                                batch.put::<StateValueByKeyHashSchema>(
-                                    &(k.clone().hash(), version),
-                                    v,
-                                )
-                            } else {
-                                batch.put::<StateValueSchema>(&(k.clone(), version), v)
-                            }
-                        })
-                    })
-                    .collect::<Result<_>>()
-            })?;
-        Ok(())
+            .zip_eq(kv_updates_per_shard.par_iter())
+            .try_for_each(|(batch, updates)| {
+                updates.iter().try_for_each(|(key_and_ver, val)| {
+                    if enable_sharding {
+                        let (key, ver) = key_and_ver;
+                        batch.put::<StateValueByKeyHashSchema>(&(CryptoHash::hash(key), *ver), val)
+                    } else {
+                        batch.put::<StateValueSchema>(key_and_ver, val)
+                    }
+                })
+            })
     }
 
     pub fn get_usage(&self, version: Option<Version>) -> Result<StateStorageUsage> {
@@ -775,8 +767,9 @@ impl StateStore {
     /// extra stale index as 1 cover the latter case.
     pub fn put_stats_and_indices(
         &self,
-        value_state_sets: &[ShardedStateUpdates],
+        per_shard_kv_updates: &ShardedKvUpdates,
         first_version: Version,
+        num_versions: usize,
         expected_usage: StateStorageUsage,
         // If not None, it must contains all keys in the value_state_sets.
         // TODO(grao): Restructure this function.
@@ -786,11 +779,7 @@ impl StateStore {
         last_checkpoint_index: Option<usize>,
         enable_sharding: bool,
     ) -> Result<()> {
-        let _timer = OTHER_TIMERS_SECONDS
-            .with_label_values(&["put_stats_and_indices"])
-            .start_timer();
-
-        let num_versions = value_state_sets.len();
+        let _timer = OTHER_TIMERS_SECONDS.timer_with(&["put_stats_and_indices"]);
 
         let base_version = first_version.checked_sub(1);
         let mut usage = self.get_usage(base_version)?;
@@ -798,27 +787,29 @@ impl StateStore {
 
         let mut state_cache_with_version = &ShardedStateCache::default();
         if let Some(base_version) = base_version {
-            let _timer = OTHER_TIMERS_SECONDS
-                .with_label_values(&["put_stats_and_indices__total_get"])
-                .start_timer();
+            let _timer = OTHER_TIMERS_SECONDS.timer_with(&["put_stats_and_indices__total_get"]);
             if let Some(sharded_state_cache) = sharded_state_cache {
                 // For some entries the base value version is None, here is to fiil those in.
                 // See `ShardedStateCache`.
                 self.prepare_version_in_cache(base_version, sharded_state_cache)?;
                 state_cache_with_version = sharded_state_cache;
             } else {
-                let key_set = value_state_sets
-                    .iter()
-                    .flat_map(|sharded_states| sharded_states.iter().flatten())
-                    .map(|(key, _)| key)
-                    .collect::<HashSet<_>>();
+                // TODO(aldenhu): get all updates from StateDelta directly
+                let key_set = {
+                    let _timer = OTHER_TIMERS_SECONDS
+                        .timer_with(&["put_stats_and_indices__get_all_updates"]);
+                    per_shard_kv_updates
+                        .iter()
+                        .flatten()
+                        .map(|((key, _ver), _val)| key)
+                        .collect::<HashSet<_>>()
+                };
                 THREAD_MANAGER.get_high_pri_io_pool().scope(|s| {
                     for key in key_set {
                         let cache = state_cache_with_version.shard(key.get_shard_id());
                         s.spawn(move |_| {
                             let _timer = OTHER_TIMERS_SECONDS
-                                .with_label_values(&["put_stats_and_indices__get_state_value"])
-                                .start_timer();
+                                .timer_with(&["put_stats_and_indices__get_state_value"]);
                             let version_and_value = self
                                 .state_db
                                 .get_state_value_with_version_by_version(key, base_version)
@@ -834,26 +825,80 @@ impl StateStore {
             }
         }
 
-        let _timer = OTHER_TIMERS_SECONDS
-            .with_label_values(&["put_stats_and_indices__calculate_total_size"])
-            .start_timer();
+        let usage_deltas = Self::put_stale_state_value_index(
+            first_version,
+            num_versions,
+            per_shard_kv_updates,
+            sharded_state_kv_batches,
+            enable_sharding,
+            &mut state_cache_with_version,
+        );
+
+        for i in 0..num_versions {
+            let mut items_delta = 0;
+            let mut bytes_delta = 0;
+            for usage_delta in usage_deltas.iter() {
+                items_delta += usage_delta[i].0;
+                bytes_delta += usage_delta[i].1;
+            }
+            usage = StateStorageUsage::new(
+                (usage.items() as i64 + items_delta) as usize,
+                (usage.bytes() as i64 + bytes_delta) as usize,
+            );
+            if (i == num_versions - 1) || Some(i) == last_checkpoint_index {
+                let version = first_version + i as u64;
+                info!("Write usage at version {version}, {usage:?}.");
+                batch.put::<VersionDataSchema>(&version, &usage.into())?
+            }
+        }
+
+        if !expected_usage.is_untracked() {
+            ensure!(
+                expected_usage == usage,
+                "Calculated state db usage at version {} not expected. expected: {:?}, calculated: {:?}, base version: {:?}, base version usage: {:?}",
+                first_version + num_versions as u64 - 1,
+                expected_usage,
+                usage,
+                base_version,
+                base_version_usage,
+            );
+        }
+
+        STATE_ITEMS.set(usage.items() as i64);
+        TOTAL_STATE_BYTES.set(usage.bytes() as i64);
+
+        Ok(())
+    }
+
+    fn put_stale_state_value_index(
+        first_version: Version,
+        num_versions: usize,
+        per_shard_kv_updates: &ShardedKvUpdates,
+        sharded_state_kv_batches: &ShardedStateKvSchemaBatch,
+        enable_sharding: bool,
+        state_cache_with_version: &mut &ShardedStateCache,
+    ) -> Vec<Vec<(i64, i64)>> {
+        let _timer = OTHER_TIMERS_SECONDS.timer_with(&["put_stale_kv_index"]);
         // calculate total state size in bytes
         let usage_deltas: Vec<Vec<_>> = state_cache_with_version
             .par_iter()
+            .zip_eq(per_shard_kv_updates.par_iter())
             .enumerate()
-            .map(|(shard_id, cache)| {
-                let _timer = OTHER_TIMERS_SECONDS
-                    .with_label_values(&[&format!(
-                        "put_stats_and_indices__calculate_total_size__shard_{shard_id}"
-                    )])
-                    .start_timer();
+            .map(|(shard_id, (cache, kv_updates))| {
+                let _timer =
+                    OTHER_TIMERS_SECONDS.timer_with(&[&format!("put_stale_kv_index__{shard_id}")]);
+
                 let mut usage_delta = Vec::with_capacity(num_versions);
-                for (idx, kvs) in value_state_sets.iter().enumerate() {
-                    let version = first_version + idx as Version;
+                let mut iter = kv_updates.iter();
+
+                // TODO(aldenhu): no need to iter by version after we calcualte the usage elsewhere
+                for version in first_version..first_version + num_versions as Version {
+                    let ver_iter = iter.take_while_ref(|((_, ver), _)| *ver == version);
+
                     let mut items_delta = 0;
                     let mut bytes_delta = 0;
 
-                    for (key, value) in kvs[shard_id].iter() {
+                    for ((key, _ver), value) in ver_iter {
                         if let Some(value) = value {
                             items_delta += 1;
                             bytes_delta += (key.size() + value.size()) as i64;
@@ -931,41 +976,7 @@ impl StateStore {
                 usage_delta
             })
             .collect();
-
-        for i in 0..num_versions {
-            let mut items_delta = 0;
-            let mut bytes_delta = 0;
-            for usage_delta in usage_deltas.iter() {
-                items_delta += usage_delta[i].0;
-                bytes_delta += usage_delta[i].1;
-            }
-            usage = StateStorageUsage::new(
-                (usage.items() as i64 + items_delta) as usize,
-                (usage.bytes() as i64 + bytes_delta) as usize,
-            );
-            if (i == num_versions - 1) || Some(i) == last_checkpoint_index {
-                let version = first_version + i as u64;
-                info!("Write usage at version {version}, {usage:?}.");
-                batch.put::<VersionDataSchema>(&version, &usage.into())?
-            }
-        }
-
-        if !expected_usage.is_untracked() {
-            ensure!(
-                expected_usage == usage,
-                "Calculated state db usage at version {} not expected. expected: {:?}, calculated: {:?}, base version: {:?}, base version usage: {:?}",
-                first_version + value_state_sets.len() as u64 - 1,
-                expected_usage,
-                usage,
-                base_version,
-                base_version_usage,
-            );
-        }
-
-        STATE_ITEMS.set(usage.items() as i64);
-        TOTAL_STATE_BYTES.set(usage.bytes() as i64);
-
-        Ok(())
+        usage_deltas
     }
 
     pub(crate) fn shard_state_value_batch(

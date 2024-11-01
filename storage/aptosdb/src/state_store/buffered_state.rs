@@ -11,10 +11,11 @@ use aptos_logger::info;
 use aptos_scratchpad::SmtAncestors;
 use aptos_storage_interface::{db_ensure as ensure, state_delta::StateDelta, AptosDbError, Result};
 use aptos_types::{
-    state_store::{combine_sharded_state_updates, state_value::StateValue, ShardedStateUpdates},
+    state_store::{state_key::StateKey, state_value::StateValue},
     transaction::Version,
 };
 use std::{
+    collections::HashMap,
     sync::{
         mpsc,
         mpsc::{Sender, SyncSender},
@@ -111,12 +112,7 @@ impl BufferedState {
             let take_out_to_commit = {
                 let state_until_checkpoint =
                     self.state_until_checkpoint.as_ref().expect("Must exist");
-                state_until_checkpoint
-                    .updates_since_base
-                    .iter()
-                    .map(|shard| shard.len())
-                    .sum::<usize>()
-                    >= self.target_items
+                state_until_checkpoint.updates_since_base.len() >= self.target_items
                     || state_until_checkpoint.current_version.map_or(0, |v| v + 1)
                         - state_until_checkpoint.base_version.map_or(0, |v| v + 1)
                         >= TARGET_SNAPSHOT_INTERVAL_IN_VERSION
@@ -154,7 +150,9 @@ impl BufferedState {
     /// This method updates the buffered state with new data.
     pub fn update(
         &mut self,
-        updates_until_next_checkpoint_since_current_option: Option<&ShardedStateUpdates>,
+        updates_until_next_checkpoint_since_current_option: Option<
+            &HashMap<StateKey, Option<StateValue>>,
+        >,
         new_state_after_checkpoint: &StateDelta,
         sync_commit: bool,
     ) -> Result<()> {
@@ -172,9 +170,10 @@ impl BufferedState {
                 new_state_after_checkpoint.base_version > self.state_after_checkpoint.base_version,
                 "Diff between base and latest checkpoints provided, while they are the same.",
             );
-            combine_sharded_state_updates(
-                &mut self.state_after_checkpoint.updates_since_base,
-                updates_until_next_checkpoint_since_current,
+            self.state_after_checkpoint.updates_since_base.extend(
+                updates_until_next_checkpoint_since_current
+                    .iter()
+                    .map(|(k, v)| (k.clone(), v.clone())),
             );
             self.state_after_checkpoint.current = new_state_after_checkpoint.base.clone();
             self.state_after_checkpoint.current_version = new_state_after_checkpoint.base_version;
