@@ -1992,7 +1992,7 @@ impl AptosVM {
                 unwrap_or_discard!(Err(deprecated_module_bundle!()))
             },
 
-            TransactionPayload::TransactionPayloadV2(
+            TransactionPayload::V2(
                 TransactionPayloadV2::V1 {
                     data,
                     extra
@@ -2606,7 +2606,7 @@ impl AptosVM {
                 }
             },
 
-            TransactionPayload::TransactionPayloadV2(
+            TransactionPayload::V2(
                 TransactionPayloadV2::V1 { data, extra } // Deprecated.
             ) => {
                 // Nested transaction payload V1 is not yet supported.

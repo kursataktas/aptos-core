@@ -11,7 +11,7 @@ use aptos_metrics_core::{
 use aptos_types::{
     contract_event::ContractEvent,
     transaction::{
-        authenticator::AccountAuthenticator, signature_verified_transaction::TransactionProvider, ExecutionStatus, Transaction, TransactionOutput, TransactionPayloadData, TransactionPayloadExtra, TransactionPayloadV2, TransactionStatus
+        authenticator::AccountAuthenticator, signature_verified_transaction::TransactionProvider, ExecutionStatus, Transaction, TransactionOutput, TransactionExecutable, TransactionExtraConfig, TransactionPayloadV2, TransactionStatus
     },
 };
 use aptos_vm::AptosVM;
@@ -475,10 +475,10 @@ pub fn update_counters_for_processed_chunk<T>(
                         .inc();
                 },
 
-                aptos_types::transaction::TransactionPayload::TransactionPayloadV2(
+                aptos_types::transaction::TransactionPayload::V2(
                     TransactionPayloadV2::V1 { 
                         data,
-                        extra: TransactionPayloadExtra:: V1 {
+                        extra: TransactionExtraConfig:: V1 {
                             multisig_address,
                             replay_protection_nonce,
                         },
@@ -486,10 +486,10 @@ pub fn update_counters_for_processed_chunk<T>(
                 ) => {
                     let mut metric_name = String::from("nested");
                     metric_name += match data {
-                        TransactionPayloadData::EntryFunction(_) => {
+                        TransactionExecutable::EntryFunction(_) => {
                             "_function"
                         },
-                        TransactionPayloadData::Script(_) => {
+                        TransactionExecutable::Script(_) => {
                             "_script"
                         },
                     };

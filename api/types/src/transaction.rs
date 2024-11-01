@@ -970,7 +970,7 @@ impl VerifyInput for TransactionPayload {
             TransactionPayload::ModuleBundlePayload(_) => {
                 bail!("Module bundle payload has been removed")
             },
-            TransactionPayload::TransactionPayloadV2(_) => {
+            TransactionPayload::V2(_) => {
                 unimplemented!("Nested transaction payload is not supported")
             },
         }
@@ -1037,21 +1037,21 @@ impl TryFrom<Script> for ScriptPayload {
     }
 }
 
-pub enum TransactionPayloadData {
+pub enum TransactionExecutable {
     EntryFunctionPayload(EntryFunctionPayload),
     ScriptPayload(ScriptPayload),
 }
 
-impl VerifyInput for TransactionPayloadData {
+impl VerifyInput for TransactionExecutable {
     fn verify(&self) -> anyhow::Result<()> {
         match self {
-            TransactionPayloadData::EntryFunctionPayload(inner) => inner.verify(),
-            TransactionPayloadData::ScriptPayload(inner) => inner.verify(),
+            TransactionExecutable::EntryFunctionPayload(inner) => inner.verify(),
+            TransactionExecutable::ScriptPayload(inner) => inner.verify(),
         }
     }
 }
 
-pub enum TransactionPayloadExtra {
+pub enum TransactionExtraConfig {
     V1 {
         multisig_address: Option<Address>,
         replay_protection_nonce: Option<u64>,
@@ -1060,8 +1060,8 @@ pub enum TransactionPayloadExtra {
 
 pub enum TransactionPayloadV2 {
     V1 {
-        data: TransactionPayloadData,
-        extra: TransactionPayloadExtra,
+        data: TransactionExecutable,
+        extra: TransactionExtraConfig,
     }
 }
 

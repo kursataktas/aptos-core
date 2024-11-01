@@ -21,7 +21,7 @@ use crate::{
     proof::TransactionInfoListWithProof,
     state_store::{state_key::StateKey, state_value::StateValue},
     transaction::{
-        block_epilogue::BlockEndInfo, ChangeSet, EntryFunction, ExecutionStatus, Module, RawTransaction, ReplayProtector, Script, SignatureCheckedTransaction, SignedTransaction, Transaction, TransactionArgument, TransactionAuxiliaryData, TransactionInfo, TransactionListWithProof, TransactionPayload, TransactionPayloadData, TransactionStatus, TransactionToCommit, Version, WriteSetPayload
+        block_epilogue::BlockEndInfo, ChangeSet, EntryFunction, ExecutionStatus, Module, RawTransaction, ReplayProtector, Script, SignatureCheckedTransaction, SignedTransaction, Transaction, TransactionArgument, TransactionAuxiliaryData, TransactionInfo, TransactionListWithProof, TransactionPayload, TransactionExecutable, TransactionStatus, TransactionToCommit, Version, WriteSetPayload
     },
     validator_info::ValidatorInfo,
     validator_signer::ValidatorSigner,
@@ -508,14 +508,14 @@ impl Arbitrary for SignedTransaction {
 }
 
 #[cfg(ignore_errors)]
-impl Arbitrary for TransactionPayloadData {
+impl Arbitrary for TransactionExecutable {
     type Parameters = ();
     type Strategy = BoxedStrategy<Self>;
 
     fn arbitrary_with(_args: ()) -> Self::Strategy {
         prop_oneof![
-            any::<Script>().prop_map(TransactionPayloadData::Script),
-            any::<EntryFunction>().prop_map(TransactionPayloadData::EntryFunction),
+            any::<Script>().prop_map(TransactionExecutable::Script),
+            any::<EntryFunction>().prop_map(TransactionExecutable::EntryFunction),
         ]
         .boxed()
     }

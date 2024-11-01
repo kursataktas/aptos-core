@@ -1105,7 +1105,7 @@ impl TransactionsApi {
                             ledger_info,
                         ))
                     },
-                    TransactionPayload::TransactionPayloadV2(_) => {
+                    TransactionPayload::V2(_) => {
                         unimplemented!("TransactionPayloadV2 is not supported")
                     }
                 }
@@ -1425,7 +1425,7 @@ impl TransactionsApi {
                     "Multisig::unknown".to_string()
                 }
             },
-            TransactionPayload::TransactionPayloadV2(_) => {
+            TransactionPayload::V2(_) => {
                 unimplemented!("TransactionPayloadV2 is not supported")
             },
         };

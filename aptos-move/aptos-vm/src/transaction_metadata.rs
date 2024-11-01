@@ -76,7 +76,7 @@ impl TransactionMetadata {
                 // else here, only `unreachable!` otherwise.
                 TransactionPayload::ModuleBundle(_) => vec![],
 
-                TransactionPayload::TransactionPayloadV2(_) => {
+                TransactionPayload::V2(_) => {
                     unimplemented!("TransactionPayloadV2 is not supported")
                 }
             },

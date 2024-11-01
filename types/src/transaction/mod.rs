@@ -215,7 +215,7 @@ impl RawTransaction {
     pub fn new_txn(
         sender: AccountAddress,
         replay_protector: ReplayProtector,
-        payload_data: TransactionPayloadData,
+        payload_data: TransactionExecutable,
         multisig_address: Option<AccountAddress>,
         max_gas_amount: u64,
         gas_unit_price: u64,
@@ -227,10 +227,10 @@ impl RawTransaction {
                 RawTransaction {
                     sender,
                     sequence_number,
-                    payload: TransactionPayload::TransactionPayloadV2(
+                    payload: TransactionPayload::V2(
                         TransactionPayloadV2::V1 {
                             data: payload_data,
-                            extra: TransactionPayloadExtra::V1 {
+                            extra: TransactionExtraConfig::V1 {
                                 replay_protection_nonce: None,
                             },
                         },
@@ -246,10 +246,10 @@ impl RawTransaction {
                     sender,
                     // Question: Is it okay to set sequence_number to u64::MAX for orderless transactions?
                     sequence_number: u64::MAX,
-                    payload: TransactionPayload::TransactionPayloadV2(
+                    payload: TransactionPayload::V2(
                         TransactionPayloadV2::V1 {
                             data: payload_data,
-                            extra: TransactionPayloadExtra::V1 {
+                            extra: TransactionExtraConfig::V1 {
                                 replay_protection_nonce: Some(nonce),
                             },
                         },
@@ -482,27 +482,29 @@ pub enum TransactionPayload {
     Multisig(Multisig),
 
     /// Question: Any better name for this variant?
-    TransactionPayloadV2(TransactionPayloadV2),
+    V2(TransactionPayloadV2),
 }
 
+/// Question: When writing  TransactionPayload::V2(TransactionPayloadV2::V1 { data, extra }), having V1 inside TransactionPayloadV2 seems odd. Still need a better naming.
 #[derive(Clone, Debug, Hash, Eq, PartialEq, Serialize, Deserialize)]
 pub enum TransactionPayloadV2 {
     V1 {
-        data: TransactionPayloadData,
-        extra: TransactionPayloadExtra,
+        data: TransactionExecutable,
+        extra: TransactionExtraConfig,
     }
 }
 
 #[derive(Clone, Debug, Hash, Eq, PartialEq, Serialize, Deserialize)]
-pub enum TransactionPayloadData {
+pub enum TransactionExecutable {
     Script(Script),
     EntryFunction(EntryFunction),
-    Multisig(Multisig),
+    Empty,
 }
 
 #[derive(Clone, Debug, Hash, Eq, PartialEq, Serialize, Deserialize)]
-pub enum TransactionPayloadExtra {
+pub enum TransactionExtraConfig {
     V1 {
+        multisig_address: Option<AccountAddress>,
         // None for regular transactions
         // Some(nonce) for orderless transactions
         replay_protection_nonce: Option<u64>,

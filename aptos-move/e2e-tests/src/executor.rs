@@ -808,7 +808,7 @@ impl FakeExecutor {
                         unreachable!("Module bundle payload has been removed")
                     },
 
-                    TransactionPayload::TransactionPayloadV2(_) => {
+                    TransactionPayload::V2(_) => {
                         unimplemented!("Nested transaction payload is not yet supported")
                     },
                 };
