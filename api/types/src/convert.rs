@@ -4,10 +4,7 @@
 
 use crate::{
     transaction::{
-        BlockEpilogueTransaction, BlockMetadataTransaction, DecodedTableData, DeleteModule,
-        DeleteResource, DeleteTableItem, DeletedTableData, MultisigPayload,
-        MultisigTransactionPayload, StateCheckpointTransaction, UserTransactionRequestInner,
-        WriteModule, WriteResource, WriteTableItem,
+        BlockEpilogueTransaction, BlockMetadataTransaction, DecodedTableData, DeleteModule, DeleteResource, DeleteTableItem, DeletedTableData, Empty, MultisigPayload, MultisigTransactionPayload, StateCheckpointTransaction, TransactionExecutable, TransactionExtraConfig, TransactionPayloadV2, TransactionPayloadV2V1, UserTransactionRequestInner, WriteModule, WriteResource, WriteTableItem
     },
     view::{ViewFunction, ViewRequest},
     Address, Bytecode, DirectWriteSet, EntryFunctionId, EntryFunctionPayload, Event,
@@ -280,52 +277,64 @@ impl<'a, S: StateView> MoveConverter<'a, S> {
         payload: aptos_types::transaction::TransactionPayload,
     ) -> Result<TransactionPayload> {
         use aptos_types::transaction::TransactionPayload::*;
+        use aptos_types::transaction::Script;
+        use aptos_types::transaction::EntryFunction;
+
+        let try_into_script_payload = |s: Script| -> Result<ScriptPayload> {
+            let (code, ty_args, args) = s.into_inner();
+            let script_args = self.inner.view_script_arguments(&code, &args, &ty_args);
+
+            let json_args = match script_args {
+                Ok(values) => values
+                    .into_iter()
+                    .map(|v| MoveValue::try_from(v)?.json())
+                    .collect::<Result<_>>()?,
+                Err(_e) => convert_txn_args(&args)
+                    .into_iter()
+                    .map(|arg| HexEncodedBytes::from(arg).json())
+                    .collect::<Result<_>>()?,
+            };
+            
+            Ok(ScriptPayload {
+                code: MoveScriptBytecode::new(code).try_parse_abi(),
+                type_arguments: ty_args.into_iter().map(|arg| arg.into()).collect(),
+                arguments: json_args,
+            })
+        };
+
+        let try_into_entry_function_payload = |fun: EntryFunction| -> Result<EntryFunctionPayload> {
+            let (module, function, ty_args, args) = fun.into_inner();
+            let func_args = self
+                .inner
+                .view_function_arguments(&module, &function, &ty_args, &args);
+
+            let json_args = match func_args {
+                Ok(values) => values
+                    .into_iter()
+                    .map(|v| MoveValue::try_from(v)?.json())
+                    .collect::<Result<_>>()?,
+                Err(_e) => args
+                    .into_iter()
+                    .map(|arg| HexEncodedBytes::from(arg).json())
+                    .collect::<Result<_>>()?,
+            };
+
+            Ok(EntryFunctionPayload {
+                arguments: json_args,
+                function: EntryFunctionId {
+                    module: module.into(),
+                    name: function.into(),
+                },
+                type_arguments: ty_args.into_iter().map(|arg| arg.into()).collect(),
+            })
+        };
+
         let ret = match payload {
             Script(s) => {
-                let (code, ty_args, args) = s.into_inner();
-                let script_args = self.inner.view_script_arguments(&code, &args, &ty_args);
-
-                let json_args = match script_args {
-                    Ok(values) => values
-                        .into_iter()
-                        .map(|v| MoveValue::try_from(v)?.json())
-                        .collect::<Result<_>>()?,
-                    Err(_e) => convert_txn_args(&args)
-                        .into_iter()
-                        .map(|arg| HexEncodedBytes::from(arg).json())
-                        .collect::<Result<_>>()?,
-                };
-                TransactionPayload::ScriptPayload(ScriptPayload {
-                    code: MoveScriptBytecode::new(code).try_parse_abi(),
-                    type_arguments: ty_args.into_iter().map(|arg| arg.into()).collect(),
-                    arguments: json_args,
-                })
+                TransactionPayload::ScriptPayload(try_into_script_payload(s)?)
             },
             EntryFunction(fun) => {
-                let (module, function, ty_args, args) = fun.into_inner();
-                let func_args = self
-                    .inner
-                    .view_function_arguments(&module, &function, &ty_args, &args);
-
-                let json_args = match func_args {
-                    Ok(values) => values
-                        .into_iter()
-                        .map(|v| MoveValue::try_from(v)?.json())
-                        .collect::<Result<_>>()?,
-                    Err(_e) => args
-                        .into_iter()
-                        .map(|arg| HexEncodedBytes::from(arg).json())
-                        .collect::<Result<_>>()?,
-                };
-
-                TransactionPayload::EntryFunctionPayload(EntryFunctionPayload {
-                    arguments: json_args,
-                    function: EntryFunctionId {
-                        module: module.into(),
-                        name: function.into(),
-                    },
-                    type_arguments: ty_args.into_iter().map(|arg| arg.into()).collect(),
-                })
+                TransactionPayload::EntryFunctionPayload(try_into_entry_function_payload(fun)?)
             },
             Multisig(multisig) => {
                 let transaction_payload = if let Some(payload) = multisig.transaction_payload {
@@ -333,34 +342,8 @@ impl<'a, S: StateView> MoveConverter<'a, S> {
                         aptos_types::transaction::MultisigTransactionPayload::EntryFunction(
                             entry_function,
                         ) => {
-                            let (module, function, ty_args, args) = entry_function.into_inner();
-                            let func_args = self
-                                .inner
-                                .view_function_arguments(&module, &function, &ty_args, &args);
-                            let json_args = match func_args {
-                                Ok(values) => values
-                                    .into_iter()
-                                    .map(|v| MoveValue::try_from(v)?.json())
-                                    .collect::<Result<_>>()?,
-                                Err(_e) => args
-                                    .into_iter()
-                                    .map(|arg| HexEncodedBytes::from(arg).json())
-                                    .collect::<Result<_>>()?,
-                            };
-
-                            Some(MultisigTransactionPayload::EntryFunctionPayload(
-                                EntryFunctionPayload {
-                                    arguments: json_args,
-                                    function: EntryFunctionId {
-                                        module: module.into(),
-                                        name: function.into(),
-                                    },
-                                    type_arguments: ty_args
-                                        .into_iter()
-                                        .map(|arg| arg.into())
-                                        .collect(),
-                                },
-                            ))
+                            let entry_function_payload = try_into_entry_function_payload(entry_function)?;
+                            Some(MultisigTransactionPayload::EntryFunctionPayload(entry_function_payload))
                         },
                     }
                 } else {
@@ -371,10 +354,43 @@ impl<'a, S: StateView> MoveConverter<'a, S> {
                     transaction_payload,
                 })
             },
-            TransactionPayloadV2(_) => {
-                unimplemented!("Nested transaction payload is not supported")
+            V2(
+                aptos_types::transaction::TransactionPayloadV2::V1 {
+                    executable,
+                    extra_config,
+                }
+            ) => {
+                let executable = match executable {
+                    aptos_types::transaction::TransactionExecutable::EntryFunction(entry_function) => {
+                        TransactionExecutable::EntryFunctionPayload(try_into_entry_function_payload(entry_function)?)
+                    },
+                    aptos_types::transaction::TransactionExecutable::Script(script) => {
+                        TransactionExecutable::ScriptPayload(try_into_script_payload(script)?)
+                    },
+                    aptos_types::transaction::TransactionExecutable::Empty => {
+                        TransactionExecutable::Empty(Empty)
+                    },
+                };
+                let extra_config = match extra_config {
+                    aptos_types::transaction::TransactionExtraConfig::V1 {
+                        multisig_address,
+                        replay_protection_nonce,
+                    } => TransactionExtraConfig::V1(
+                        crate::transaction::TransactionExtraConfigV1 {
+                            multisig_address: multisig_address.map(|multisig_address| multisig_address.into()),
+                            replay_protection_nonce,
+                        }   
+                    )
+                };
+                TransactionPayload::V2(
+                    crate::transaction::TransactionPayloadV2::V1(
+                        TransactionPayloadV2V1 {
+                            executable,
+                            extra_config,
+                        }
+                    )
+                )
             },
-
             // Deprecated.
             ModuleBundle(_) => bail!("Module bundle payload has been removed"),
         };
@@ -757,39 +773,38 @@ impl<'a, S: StateView> MoveConverter<'a, S> {
                 Target::Script(try_into_script_payload(script)?)
             },
             TransactionPayload::MultisigPayload(multisig) => {
-                let transaction_payload = multisig.transaction_payload.map(|payload| {
+                let transaction_payload = if let Some(payload) = multisig.transaction_payload {
                     match payload {
-                        MultisigTransactionPayload::EntryFunctionPayload(entry_function) => {
-                            aptos_types::transaction::MultisigTransactionPayload::EntryFunction(try_into_entry_function(entry_function)?)
+                        MultisigTransactionPayload::EntryFunctionPayload(entry_func_payload) => {
+                            let entry_function = try_into_entry_function(entry_func_payload)?;
+                            Some(aptos_types::transaction::MultisigTransactionPayload::EntryFunction(entry_function))
                         },
                     }
-                });
+                } else {
+                    None
+                };
                 Target::Multisig(Multisig {
                     multisig_address: multisig.multisig_address.into(),
                     transaction_payload,
                 })
             },
-            TransactionPayload::V2(
-                TransactionPayloadV2::V1 {
-                    executable,
-                    extra_config,
-                },
-            ) => {
+            TransactionPayload::V2(TransactionPayloadV2::V1(TransactionPayloadV2V1 {
+                executable, 
+                extra_config
+            })) => {
                 let executable = match executable {
-                    TransactionExecutable::EntryFunction(entry_func_payload) => {
+                    TransactionExecutable::EntryFunctionPayload(entry_func_payload) => {
                         Executable::EntryFunction(try_into_entry_function(entry_func_payload)?)
                     },
-                    TransactionExecutable::Script(script_payload) => {
+                    TransactionExecutable::ScriptPayload(script_payload) => {
                         Executable::Script(try_into_script_payload(script_payload)?)
                     },
+                    TransactionExecutable::Empty(_) => Executable::Empty,
                 };
                 let extra_config = match extra_config {
-                    V1 {
-                        multisig_address,
-                        replay_protection_nonce,
-                    } => ExtraConfig::V1 {
-                        multisig_address: multisig_address.map(|multisig_address| multisig_address.into()),
-                        replay_protection_nonce: replay_protection_nonce.into(),
+                    TransactionExtraConfig::V1(extra_config) => ExtraConfig::V1 {
+                        multisig_address: extra_config.multisig_address.map(|multisig_address| multisig_address.into()),
+                        replay_protection_nonce: extra_config.replay_protection_nonce.into(),
                     },
                 };
                 Target::V2(TargetV2::V1 {

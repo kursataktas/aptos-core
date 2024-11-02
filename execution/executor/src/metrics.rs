@@ -485,12 +485,15 @@ pub fn update_counters_for_processed_chunk<T>(
                     },
                 ) => {
                     let mut metric_name = String::from("nested");
-                    metric_name += match data {
+                    metric_name += match executable {
                         TransactionExecutable::EntryFunction(_) => {
                             "_function"
                         },
                         TransactionExecutable::Script(_) => {
                             "_script"
+                        },
+                        TransactionExecutable::Empty => {
+                            "_empty"
                         },
                     };
                     metric_name += if multisig_address.is_some() {

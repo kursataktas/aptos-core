@@ -178,6 +178,10 @@ pub fn convert_transaction_payload(
             )),
         },
 
+        TransactionPayload::V2(_) => {
+            unimplemented!("V2 payload is not yet implemented")
+        },
+
         // Deprecated.
         TransactionPayload::ModuleBundlePayload(_) => {
             unreachable!("Module bundle payload has been removed")
