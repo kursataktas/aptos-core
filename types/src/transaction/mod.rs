@@ -522,6 +522,12 @@ impl TransactionPayload {
     }
 }
 
+impl TransactionExtraConfig {
+    pub fn is_multisig(&self) -> bool {
+        matches!(self, Self::V1 { multisig_address: Some(_), replay_protection_nonce: _ })
+    }
+}
+
 /// Two different kinds of WriteSet transactions.
 #[derive(Clone, Debug, Hash, Eq, PartialEq, Serialize, Deserialize)]
 pub enum WriteSetPayload {
