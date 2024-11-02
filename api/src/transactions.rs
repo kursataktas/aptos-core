@@ -1454,8 +1454,28 @@ impl TransactionsApi {
                     "Multisig::unknown".to_string()
                 }
             },
-            TransactionPayload::V2(_) => {
-                unimplemented!("TransactionPayloadV2 is not supported")
+            TransactionPayload::V2(TransactionPayloadV2::V1 {
+                executable,
+                extra_config,
+            }) => {
+                let mut stats_key: String = "V2::".to_string();
+                if extra_config.is_multisig() {
+                    stats_key += "Multisig::";
+                };
+                if extra_config.is_orderless() {
+                    stats_key += "Orderless::";
+                }
+                if let TransactionExecutable::Script(_) = executable {
+                    stats_key += format!("Script::{}", txn.committed_hash()).as_str();
+                } else if let TransactionExecutable::EntryFunction(entry_function) = executable {
+                    stats_key += FunctionStats::function_to_key(
+                        entry_function.module(),
+                        &entry_function.function().into(),
+                    ).as_str();
+                } else if let TransactionExecutable::Empty = executable {
+                    stats_key += "unknown";
+                };
+                stats_key
             },
         };
         self.context

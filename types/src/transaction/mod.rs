@@ -526,6 +526,10 @@ impl TransactionExtraConfig {
     pub fn is_multisig(&self) -> bool {
         matches!(self, Self::V1 { multisig_address: Some(_), replay_protection_nonce: _ })
     }
+
+    pub fn is_orderless(&self) -> bool {
+        matches!(self, Self::V1 { multisig_address: _, replay_protection_nonce: Some(_) })
+    }
 }
 
 /// Two different kinds of WriteSet transactions.
