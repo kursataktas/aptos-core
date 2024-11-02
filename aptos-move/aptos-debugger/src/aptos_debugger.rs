@@ -13,9 +13,7 @@ use aptos_types::{
     contract_event::ContractEvent,
     state_store::TStateView,
     transaction::{
-        signature_verified_transaction::SignatureVerifiedTransaction, BlockOutput,
-        SignedTransaction, Transaction, TransactionInfo, TransactionOutput, TransactionPayload,
-        Version,
+        signature_verified_transaction::SignatureVerifiedTransaction, BlockOutput, SignedTransaction, Transaction, TransactionExecutable, TransactionInfo, TransactionOutput, TransactionPayload, TransactionPayloadV2, Version
     },
     vm_status::VMStatus,
 };
@@ -389,8 +387,20 @@ fn print_transaction_stats(sig_verified_txns: &[SignatureVerifiedTransaction], v
                     TransactionPayload::Script(_) => "script".to_string(),
                     TransactionPayload::ModuleBundle(_) => panic!("deprecated module bundle"),
                     TransactionPayload::Multisig(_) => "multisig".to_string(),
-                    TransactionPayload::V2(_) => {
-                        unimplemented!("TransactionPayloadV2 is not supported")
+                    TransactionPayload::V2(TransactionPayloadV2::V1 {
+                        executable,
+                        extra_config,
+                    }) => {
+                        // TODO: Should we separate orderless transactions here?
+                        match executable {
+                            TransactionExecutable::EntryFunction(txn) => format!(
+                                "entry: {:?}::{:?}",
+                                txn.module().name.as_str(),
+                                txn.function().as_str()
+                            ),
+                            TransactionExecutable::Script(_) => "script".to_string(),
+                            TransactionExecutable::Empty => "empty".to_string()
+                        }
                     },
                 })
         })
