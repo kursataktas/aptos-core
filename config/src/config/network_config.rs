@@ -36,9 +36,9 @@ use std::{
 /// [`aptos_network::protocols::wire::v1`](../../network/protocols/wire/handshake/v1/index.html).
 pub const HANDSHAKE_VERSION: u8 = 0;
 pub const NETWORK_CHANNEL_SIZE: usize = 1024;
-pub const PING_INTERVAL_MS: u64 = 10_000;
+pub const PING_INTERVAL_MS: u64 = 20_000;
 pub const PING_TIMEOUT_MS: u64 = 20_000;
-pub const PING_FAILURES_TOLERATED: u64 = 3;
+pub const PING_FAILURES_TOLERATED: u64 = 10;
 pub const CONNECTIVITY_CHECK_INTERVAL_MS: u64 = 5000;
 pub const MAX_CONNECTION_DELAY_MS: u64 = 60_000; /* 1 minute */
 pub const MAX_FULLNODE_OUTBOUND_CONNECTIONS: usize = 6;

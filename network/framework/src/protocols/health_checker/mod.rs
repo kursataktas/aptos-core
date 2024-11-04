@@ -280,9 +280,9 @@ impl<NetworkClient: NetworkClientInterface<HealthCheckerMsg> + Unpin> HealthChec
         peer_id: PeerId,
         ping: Ping,
         protocol: ProtocolId,
-        res_tx: oneshot::Sender<Result<Bytes, RpcError>>,
+        _res_tx: oneshot::Sender<Result<Bytes, RpcError>>,
     ) {
-        let message = match protocol.to_bytes(&HealthCheckerMsg::Pong(Pong(ping.0))) {
+        let _message = match protocol.to_bytes(&HealthCheckerMsg::Pong(Pong(ping.0))) {
             Ok(msg) => msg,
             Err(e) => {
                 warn!(
@@ -300,10 +300,11 @@ impl<NetworkClient: NetworkClientInterface<HealthCheckerMsg> + Unpin> HealthChec
             peer_id.short_str(),
             ping.0,
         );
+        /*
         // Record Ingress HC here and reset failures.
         self.network_interface.reset_peer_failures(peer_id);
-
         let _ = res_tx.send(Ok(message.into()));
+         */
     }
 
     async fn handle_ping_response(
