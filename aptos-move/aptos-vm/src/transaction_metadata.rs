@@ -8,7 +8,7 @@ use aptos_types::{
     account_address::AccountAddress,
     chain_id::ChainId,
     transaction::{
-        authenticator::TransactionAuthenticator::{FeePayer, MultiAgent}, user_transaction_context::UserTransactionContext, EntryFunction, Multisig, RawTransactionWithData, ReplayProtector, SignedTransaction, TransactionPayload
+        authenticator::TransactionAuthenticator::{FeePayer, MultiAgent}, user_transaction_context::UserTransactionContext, EntryFunction, Multisig, RawTransactionWithData, ReplayProtector, SignedTransaction, TransactionExecutable, TransactionPayload, TransactionPayloadV2
     },
 };
 
@@ -75,8 +75,15 @@ impl TransactionMetadata {
                 // else here, only `unreachable!` otherwise.
                 TransactionPayload::ModuleBundle(_) => vec![],
 
-                TransactionPayload::V2(_) => {
-                    unimplemented!("TransactionPayloadV2 is not supported")
+                TransactionPayload::V2(TransactionPayloadV2::V1 { executable, extra_config }) => {
+                    if extra_config.is_multisig() {
+                        vec![]
+                    } else {
+                        match executable {
+                            TransactionExecutable::Script(s) => HashValue::sha3_256_of(s.code()).to_vec(),
+                            _ => vec![]
+                        }
+                    }
                 }
             },
             script_size: match txn.payload() {
