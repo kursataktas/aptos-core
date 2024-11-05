@@ -4,6 +4,7 @@
 use crate::consensus_observer::common::error::Error;
 use aptos_consensus_types::{
     common::{BatchPayload, Payload},
+    payload::InlineBatches,
     pipelined_block::PipelinedBlock,
     proof_of_store::{BatchInfo, ProofCache, ProofOfStore},
 };
@@ -366,7 +367,10 @@ pub enum BlockTransactionPayload {
     InQuorumStore(PayloadWithProof),
     InQuorumStoreWithLimit(PayloadWithProofAndLimit),
     QuorumStoreInlineHybrid(PayloadWithProofAndLimit, Vec<BatchInfo>),
-    OptQuorumStore(PayloadWithProofAndLimit, Vec<BatchInfo>),
+    OptQuorumStore(
+        PayloadWithProofAndLimit,
+        /* OptQS and Inline Batches */ Vec<BatchInfo>,
+    ),
 }
 
 impl BlockTransactionPayload {
@@ -513,8 +517,11 @@ impl BlockTransactionPayload {
                 // Verify the batches in the requested block
                 self.verify_batches(opt_qs_payload.proof_with_data())?;
 
-                // Verify the inline batches
-                self.verify_opt_batches(opt_qs_payload.opt_batches())?;
+                // Verify optQS and inline batches
+                self.verify_optqs_and_inline_batches(
+                    opt_qs_payload.opt_batches(),
+                    opt_qs_payload.inline_batches(),
+                )?;
 
                 // Verify the transaction limit
                 self.verify_transaction_limit(opt_qs_payload.max_txns_to_execute())?;
@@ -578,9 +585,15 @@ impl BlockTransactionPayload {
         Ok(())
     }
 
-    fn verify_opt_batches(&self, expected_opt_batches: &Vec<BatchInfo>) -> Result<(), Error> {
-        let opt_batches: &Vec<BatchInfo> = match self {
-            BlockTransactionPayload::OptQuorumStore(_, opt_batches) => opt_batches,
+    fn verify_optqs_and_inline_batches(
+        &self,
+        expected_opt_batches: &Vec<BatchInfo>,
+        expected_inline_batches: &InlineBatches,
+    ) -> Result<(), Error> {
+        let optqs_and_inline_batches: &Vec<BatchInfo> = match self {
+            BlockTransactionPayload::OptQuorumStore(_, optqs_and_inline_batches) => {
+                optqs_and_inline_batches
+            },
             _ => {
                 return Err(Error::InvalidMessageError(
                     "Transaction payload is not an OptQS Payload".to_string(),
@@ -588,10 +601,16 @@ impl BlockTransactionPayload {
             },
         };
 
-        if expected_opt_batches != opt_batches {
+        let expected_opt_and_inline_batches = expected_opt_batches.iter().chain(
+            expected_inline_batches
+                .iter()
+                .map(|inline_batch| inline_batch.info()),
+        );
+
+        if !expected_opt_and_inline_batches.eq(optqs_and_inline_batches.iter()) {
             return Err(Error::InvalidMessageError(format!(
-                "Transaction payload failed optimistic batch verification! Expected optimistic batches {:?} but found {:?}",
-                expected_opt_batches, opt_batches
+                "Transaction payload failed batch verification! Expected optimistic batches {:?}, inline batches {:?} but found {:?}",
+                expected_opt_batches, expected_inline_batches, optqs_and_inline_batches
             )));
         }
         Ok(())
@@ -608,6 +627,7 @@ impl BlockTransactionPayload {
             BlockTransactionPayload::QuorumStoreInlineHybrid(payload, _) => {
                 payload.transaction_limit
             },
+            BlockTransactionPayload::OptQuorumStore(payload, _) => payload.transaction_limit,
             _ => {
                 return Err(Error::InvalidMessageError(
                     "Transaction payload does not contain a limit!".to_string(),
