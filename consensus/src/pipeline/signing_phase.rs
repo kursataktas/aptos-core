@@ -86,6 +86,7 @@ impl StatelessPipeline for SigningPhase {
                 .commit_vote_fut
                 .clone()
                 .await
+                .map(|sig| sig.signature().clone())
                 .map_err(|_| Error::InternalError("Failed to sign commit vote".to_string())),
             // signature_result: self
             //     .safety_rule_handle

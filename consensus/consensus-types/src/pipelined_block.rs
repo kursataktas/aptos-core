@@ -6,15 +6,13 @@ use crate::{
     block::Block,
     common::{Payload, Round},
     order_vote_proposal::OrderVoteProposal,
+    pipeline::commit_vote::CommitVote,
     pipeline_execution_result::PipelineExecutionResult,
     quorum_cert::QuorumCert,
     vote_proposal::VoteProposal,
 };
 use anyhow::Error;
-use aptos_crypto::{
-    bls12381,
-    hash::{HashValue, ACCUMULATOR_PLACEHOLDER_HASH},
-};
+use aptos_crypto::hash::{HashValue, ACCUMULATOR_PLACEHOLDER_HASH};
 use aptos_executor_types::{state_compute_result::StateComputeResult, ExecutorResult};
 use aptos_infallible::Mutex;
 use aptos_logger::{error, warn};
@@ -70,7 +68,7 @@ pub type PrepareResult = Arc<Vec<SignatureVerifiedTransaction>>;
 pub type ExecuteResult = ();
 pub type LedgerUpdateResult = (StateComputeResult, Option<u64>);
 pub type PostLedgerUpdateResult = ();
-pub type CommitVoteResult = bls12381::Signature;
+pub type CommitVoteResult = CommitVote;
 pub type PreCommitResult = StateComputeResult;
 pub type PostPreCommitResult = ();
 pub type CommitLedgerResult = Option<LedgerInfoWithSignatures>;

@@ -190,8 +190,11 @@ impl PipelineBuilder {
         let prepare_fut = spawn_ready_fut(Arc::new(vec![]));
         let execute_fut = spawn_ready_fut(());
         let ledger_update_fut = spawn_ready_fut((compute_result.clone(), None));
-        let commit_vote_fut =
-            spawn_ready_fut(self.signer.sign(commit_proof.ledger_info()).unwrap());
+        let commit_vote_fut = spawn_ready_fut(CommitVote::new_with_signature(
+            self.signer.author(),
+            commit_proof.ledger_info().clone(),
+            self.signer.sign(commit_proof.ledger_info()).unwrap(),
+        ));
         let pre_commit_fut = spawn_ready_fut(compute_result);
         let commit_ledger_fut = spawn_ready_fut(Some(commit_proof));
         let post_ledger_update_fut = spawn_ready_fut(());
@@ -526,7 +529,11 @@ impl PipelineBuilder {
         let ledger_info = LedgerInfo::new(block_info, HashValue::zero());
         info!("[Pipeline] Signed ledger info {ledger_info}");
         let signature = signer.sign(&ledger_info).unwrap();
-        Ok(signature)
+        Ok(CommitVote::new_with_signature(
+            signer.author(),
+            ledger_info,
+            signature,
+        ))
     }
 
     async fn pre_commit(
