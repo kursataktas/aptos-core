@@ -14,7 +14,7 @@ use crate::{
 use aptos_gas_algebra::Gas;
 use aptos_types::{
     account_config::constants::CORE_CODE_ADDRESS, fee_statement::FeeStatement,
-    on_chain_config::Features, transaction::Multisig,
+    on_chain_config::Features, transaction::{Multisig, TransactionExecutable},
 };
 use aptos_vm_logging::log_schema::AdapterLogSchema;
 use aptos_vm_types::module_and_script_storage::module_storage::AptosModuleStorage;
@@ -92,7 +92,7 @@ pub(crate) fn run_script_prologue(
     traversal_context: &mut TraversalContext,
     is_simulation: bool,
 ) -> Result<(), VMStatus> {
-    let txn_sequence_number = txn_data.sequence_number();
+    let txn_replay_protector = txn_data.replay_protector();
     let txn_authentication_key = txn_data.authentication_key().to_vec();
     let txn_gas_price = txn_data.gas_unit_price();
     let txn_max_gas_units = txn_data.max_gas_amount();
@@ -234,7 +234,8 @@ pub(crate) fn run_multisig_prologue(
     session: &mut SessionExt,
     module_storage: &impl AptosModuleStorage,
     txn_data: &TransactionMetadata,
-    payload: &Multisig,
+    executable: TransactionExecutable,
+    multisig_address: AccountAddress,
     features: &Features,
     log_context: &AdapterLogSchema,
     traversal_context: &mut TraversalContext,
@@ -258,7 +259,7 @@ pub(crate) fn run_multisig_prologue(
             vec![],
             serialize_values(&vec![
                 MoveValue::Signer(txn_data.sender),
-                MoveValue::Address(payload.multisig_address),
+                MoveValue::Address(multisig_address),
                 MoveValue::vector_u8(provided_payload),
             ]),
             &mut UnmeteredGasMeter,

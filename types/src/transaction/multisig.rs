@@ -5,6 +5,8 @@ use crate::transaction::{user_transaction_context::MultisigPayload, EntryFunctio
 use move_core_types::{account_address::AccountAddress, vm_status::VMStatus};
 use serde::{Deserialize, Serialize};
 
+use super::TransactionExecutable;
+
 /// A multisig transaction that allows an owner of a multisig account to execute a pre-approved
 /// transaction as the multisig account.
 #[derive(Clone, Debug, Hash, Eq, PartialEq, Serialize, Deserialize)]
@@ -31,6 +33,13 @@ impl Multisig {
                     entry.as_entry_function_payload()
                 },
             ),
+        }
+    }
+
+    pub fn as_transaction_executable(self) -> TransactionExecutable {
+        match self.transaction_payload {
+            Some(MultisigTransactionPayload::EntryFunction(entry)) => TransactionExecutable::EntryFunction(entry),
+            None => TransactionExecutable::Empty,
         }
     }
 }

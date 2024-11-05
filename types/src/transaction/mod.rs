@@ -82,7 +82,7 @@ use std::{collections::BTreeSet, hash::Hash, ops::Deref, sync::atomic::AtomicU64
 pub type Version = u64; // Height - also used for MVCC in StateDB
 pub type AtomicVersion = AtomicU64;
 
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub enum ReplayProtector {
     SequenceNumber(u64),
     Nonce(u64),
@@ -503,6 +503,20 @@ pub enum TransactionExecutable {
     Empty,
 }
 
+impl TransactionExecutable {
+    pub fn is_empty(&self) -> bool {
+        matches!(self, Self::Empty)
+    }
+
+    pub fn is_script(&self) -> bool {
+        matches!(self, Self::Script(_))
+    }
+
+    pub fn is_entry_function(&self) -> bool {
+        matches!(self, Self::EntryFunction(_))
+    }
+}
+
 #[derive(Clone, Debug, Hash, Eq, PartialEq, Serialize, Deserialize)]
 pub enum TransactionExtraConfig {
     V1 {
@@ -529,6 +543,15 @@ impl TransactionExtraConfig {
 
     pub fn is_orderless(&self) -> bool {
         matches!(self, Self::V1 { multisig_address: _, replay_protection_nonce: Some(_) })
+    }
+
+    pub fn multisig_address(&self) -> Option<AccountAddress> {
+        match self {
+            Self::V1 {
+                multisig_address,
+                replay_protection_nonce: _,
+            } => *multisig_address,
+        }
     }
 }
 
@@ -837,6 +860,23 @@ impl SignedTransaction {
         *self
             .committed_hash
             .get_or_init(|| Transaction::UserTransaction(self.clone()).hash())
+    }
+
+    pub fn replay_protector(&self) -> ReplayProtector {
+        match &self.raw_txn.payload {
+            TransactionPayload::V2(TransactionPayloadV2::V1 { extra_config, .. }) => {
+                if let TransactionExtraConfig::V1 {
+                    replay_protection_nonce: Some(nonce),
+                    ..
+                } = extra_config
+                {
+                    ReplayProtector::Nonce(*nonce)
+                } else {
+                    ReplayProtector::SequenceNumber(self.sequence_number())
+                }
+            }
+            _ => ReplayProtector::SequenceNumber(self.sequence_number()),
+        }
     }
 }
 

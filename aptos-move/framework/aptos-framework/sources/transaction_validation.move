@@ -153,6 +153,12 @@ module aptos_framework::transaction_validation {
         }
     }
 
+    fun prologue_common(
+
+    ) {
+        
+    }
+
     fun script_prologue(
         sender: signer,
         txn_sequence_number: u64,

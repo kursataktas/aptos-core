@@ -8,18 +8,17 @@ use aptos_types::{
     account_address::AccountAddress,
     chain_id::ChainId,
     transaction::{
-        authenticator::TransactionAuthenticator::{FeePayer, MultiAgent},
-        user_transaction_context::UserTransactionContext,
-        EntryFunction, Multisig, RawTransactionWithData, SignedTransaction, TransactionPayload,
+        authenticator::TransactionAuthenticator::{FeePayer, MultiAgent}, user_transaction_context::UserTransactionContext, EntryFunction, Multisig, RawTransactionWithData, ReplayProtector, SignedTransaction, TransactionPayload
     },
 };
+
 
 pub struct TransactionMetadata {
     pub sender: AccountAddress,
     pub authentication_key: Vec<u8>,
     pub secondary_signers: Vec<AccountAddress>,
     pub secondary_authentication_keys: Vec<Vec<u8>>,
-    pub sequence_number: u64,
+    pub replay_protector: ReplayProtector,
     pub fee_payer: Option<AccountAddress>,
     pub fee_payer_authentication_key: Option<Vec<u8>>,
     pub max_gas_amount: Gas,
@@ -55,7 +54,7 @@ impl TransactionMetadata {
                         .map_or_else(Vec::new, |auth_key| auth_key.to_vec())
                 })
                 .collect(),
-            sequence_number: txn.sequence_number(),
+            replay_protector: txn.replay_protector(),
             fee_payer: txn.authenticator_ref().fee_payer_address(),
             fee_payer_authentication_key: txn.authenticator().fee_payer_signer().map(|signer| {
                 signer
@@ -162,8 +161,8 @@ impl TransactionMetadata {
         &self.authentication_key
     }
 
-    pub fn sequence_number(&self) -> u64 {
-        self.sequence_number
+    pub fn replay_protector(&self) -> ReplayProtector {
+        self.replay_protector
     }
 
     pub fn transaction_size(&self) -> NumBytes {
